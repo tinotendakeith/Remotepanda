@@ -1,0 +1,8 @@
+*.zip
+*.db
+*.log
+error_log
+logs/
+vendor/
+node_modules/
+.DS_Store

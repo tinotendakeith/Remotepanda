@@ -1,0 +1,7 @@
+---
+deployment:
+  tasks:
+    - /bin/mkdir -p /home2/radpanda/public_html/remote
+    - /bin/mkdir -p /home2/radpanda/public_html/cloud
+    - /bin/rsync -av --delete --exclude='includes/database_config.local.php' --exclude='storage/' --exclude='logs/' --exclude='error_log' /home2/radpanda/repositories/Remotepanda/remotepanda/ /home2/radpanda/public_html/remote/
+    - /bin/rsync -av --delete --exclude='storage/' --exclude='error_log' /home2/radpanda/repositories/Remotepanda/radpanda-cloud/ /home2/radpanda/public_html/cloud/

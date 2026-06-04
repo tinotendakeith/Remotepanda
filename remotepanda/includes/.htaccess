@@ -1,0 +1,8 @@
+<FilesMatch "^(database_config(\.local)?|database_config\.local\.example|dbconnection|api_security|platform_settings)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>

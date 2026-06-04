@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DICOM Viewer</title>
+
+    <!-- Include cornerstone libraries -->
+    <script src="https://unpkg.com/cornerstone-core@2.3.0/dist/cornerstone.js"></script>
+    <script src="https://unpkg.com/cornerstone-wado-image-loader@3.2.0/dist/cornerstoneWADOImageLoader.js"></script>
+    <script src="https://unpkg.com/dicom-parser@1.8.6/dist/dicomParser.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #dicomImage {
+            width: 512px;
+            height: 512px;
+            border: 1px solid black;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>DICOM Viewer</h1>
+<p>Uploaded DICOM file:</p>
+<input type="file" id="dicomInput">
+<div id="dicomImage"></div>
+
+    <script>
+        // Enable Cornerstone on the element
+const element = document.getElementById('dicomImage');
+cornerstone.enable(element);
+
+// Handle file input and read the DICOM file
+document.getElementById('dicomInput').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        
+        // Read the file as an ArrayBuffer
+        reader.onload = function(event) {
+            const arrayBuffer = event.target.result;
+
+            // Create an imageId using cornerstone's built-in file loader
+            const imageId = cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
+
+            // Load the DICOM image and display it
+            cornerstone.loadAndCacheImage(imageId).then(function(image) {
+                cornerstone.displayImage(element, image);
+            }).catch(function(err) {
+                console.error("Error loading DICOM image: ", err);
+                alert("There was an error loading the DICOM file.");
+            });
+        };
+
+        reader.readAsArrayBuffer(file);  // Read the file as an ArrayBuffer
+    } else {
+        alert("No file selected.");
+    }
+});
+
+    </script>
+
+</body>
+</html>

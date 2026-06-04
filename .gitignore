@@ -1,0 +1,31 @@
+# Local/server credentials
+**/database_config.local.php
+**/database_config.local.example.php
+**/.env
+**/env
+
+# Runtime and patient data
+**/storage/
+**/logs/
+**/writable/session/
+**/writable/cache/
+**/writable/logs/
+**/uploads/
+**/extensions/hl7_files/
+**/extensions/pdf/
+remotepanda/pmms_3/
+**/error_log
+**/ci_session*
+*.hl7
+
+# Database/archive dumps
+*.sql
+*.sql.gz
+*.db
+*.zip
+*.tar
+*.tar.gz
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple DICOM Viewer</title>
+    <style>
+        #dicomImage {
+            width: 512px;
+            height: 512px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple DICOM Viewer</h1>
+    <div id="dicomImage"></div>
+
+    <!-- Include cornerstone libraries -->
+    <script src="https://unpkg.com/cornerstone-core@2.4.0/dist/cornerstone.js"></script>
+    <script src="https://unpkg.com/cornerstone-wado-image-loader@2.3.0/dist/cornerstoneWADOImageLoader.js"></script>
+
+    <script>
+        // Initialize Cornerstone
+        cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+
+        // Get the element to display the DICOM image
+        const element = document.getElementById('dicomImage');
+
+        // Enable the element for Cornerstone
+        cornerstone.enable(element);
+
+        // Load a DICOM image (replace this with your own DICOM file)
+        const imageId = 'wadouri:C:/Users/MAIN-SERVER/Downloads/Anonymized_20240930/series-00000/image-00000.dcm';  // Change the URL to your DICOM file
+
+        // Display the image
+        cornerstone.loadAndCacheImage(imageId).then(function(image) {
+            cornerstone.displayImage(element, image);
+        }).catch(function(error) {
+            console.error(error);
+        });
+    </script>
+</body>
+</html>
