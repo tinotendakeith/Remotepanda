@@ -103,11 +103,18 @@ body.embed .status{margin-left:auto}
     tryNext();
   }
 
+  const viewerAppBaseUrl = (function(){
+    const marker = '/viewer/';
+    const path = window.location.pathname || '';
+    const pos = path.indexOf(marker);
+    return pos >= 0 ? path.slice(0, pos) : '';
+  })();
+
   function loadLibraries(cb){
     const required = [
       ['https://cdn.jsdelivr.net/npm/dicom-parser@1.8.21/dist/dicomParser.min.js','https://unpkg.com/dicom-parser@1.8.21/dist/dicomParser.min.js'],
       ['https://cdn.jsdelivr.net/npm/cornerstone-core@2.6.1/dist/cornerstone.min.js','https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.min.js'],
-      ['https://cdn.jsdelivr.net/npm/cornerstone-wado-image-loader@3.2.0/dist/cornerstoneWADOImageLoader.js','https://unpkg.com/cornerstone-wado-image-loader@3.2.0/dist/cornerstoneWADOImageLoader.js','https://cdnjs.cloudflare.com/ajax/libs/cornerstone-wado-image-loader/3.1.0/cornerstoneWADOImageLoader.js','https://cdnjs.cloudflare.com/ajax/libs/cornerstone-wado-image-loader/2.1.1/cornerstoneWADOImageLoader.js','/remotepanda/viewer/vendor/cornerstoneWADOImageLoader.bundle.min.js']
+      ['https://cdn.jsdelivr.net/npm/cornerstone-wado-image-loader@3.2.0/dist/cornerstoneWADOImageLoader.js','https://unpkg.com/cornerstone-wado-image-loader@3.2.0/dist/cornerstoneWADOImageLoader.js','https://cdnjs.cloudflare.com/ajax/libs/cornerstone-wado-image-loader/3.1.0/cornerstoneWADOImageLoader.js','https://cdnjs.cloudflare.com/ajax/libs/cornerstone-wado-image-loader/2.1.1/cornerstoneWADOImageLoader.js', viewerAppBaseUrl + '/viewer/vendor/cornerstoneWADOImageLoader.bundle.min.js']
     ];
     const optional = [
       ['https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js','https://unpkg.com/hammerjs@2.0.8/hammer.min.js'],
@@ -407,7 +414,7 @@ body.embed .status{margin-left:auto}
     resetBtn.addEventListener('click', function(){ try{ cornerstone.reset(viewer); render(); }catch(e){} });
 
     setStatus('Loading file list...');
-    fetch('/remotepanda/api/list-study-files.php?studyint=' + encodeURIComponent(studyint), { cache:'no-store' })
+    fetch(viewerAppBaseUrl + '/api/list-study-files.php?studyint=' + encodeURIComponent(studyint), { cache:'no-store' })
       .then(function(res){
         return res.text().then(function(raw){
           var data = null;

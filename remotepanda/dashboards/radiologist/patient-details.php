@@ -11,6 +11,13 @@ include('../../functions.php');
 include('../../includes/remote_reporting_service.php');
 include('../../includes/typist_workflow_service.php');
 include('../../includes/report_template_helper.php');
+$remoteScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+$remoteBaseUrl = '';
+$remoteDashPos = strpos($remoteScriptName, '/dashboards/');
+if ($remoteDashPos !== false) {
+    $remoteBaseUrl = substr($remoteScriptName, 0, $remoteDashPos);
+}
+$remoteBaseUrl = rtrim($remoteBaseUrl, '/');
 if (!isLoggedIn()) {
     $_SESSION['msg'] = "You must log in first";
     header('location: index.php');
@@ -491,7 +498,7 @@ if ($patientDob !== '') {
 
         <div class="rp-actions">
             <button class="rp-btn rp-btn-primary" type="button" id="openImageBtn" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</button>
-            <a id="downloadZipBtn" class="rp-btn rp-btn-success" href="/remotepanda/api/download-study-package.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>" download>Download Images</a>
+            <a id="downloadZipBtn" class="rp-btn rp-btn-success" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/api/download-study-package.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>" download>Download Images</a>
             <span id="imageStatus" class="rp-status"></span>
         </div>
     </div>
@@ -551,7 +558,7 @@ if ($patientDob !== '') {
                             <?php if (trim((string)($dictation['note_text'] ?? '')) !== ''): ?>
                                 <small><?php echo htmlspecialchars((string)$dictation['note_text']); ?></small>
                             <?php endif; ?>
-                            <audio controls preload="none" src="/remotepanda/api/download-dictation.php?id=<?php echo (int)$dictation['id']; ?>" style="width:100%;margin-top:7px;"></audio>
+                            <audio controls preload="none" src="<?php echo htmlspecialchars($remoteBaseUrl); ?>/api/download-dictation.php?id=<?php echo (int)$dictation['id']; ?>" style="width:100%;margin-top:7px;"></audio>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -1205,7 +1212,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const reportTemplateList = document.getElementById('reportTemplateList');
     const reportTemplateItems = Array.prototype.slice.call(document.querySelectorAll('.rp-template-item'));
     const reportInsertButtons = Array.prototype.slice.call(document.querySelectorAll('.js-report-insert'));
-    const templateRenderBaseUrl = '/remotepanda/api/radiologist-template-render.php?accession=<?php echo isset($accession) ? rawurlencode((string)$accession) : ''; ?>';
+    const remoteBaseUrl = <?php echo json_encode($remoteBaseUrl); ?>;
+    const templateRenderBaseUrl = remoteBaseUrl + '/api/radiologist-template-render.php?accession=<?php echo isset($accession) ? rawurlencode((string)$accession) : ''; ?>';
 
     if (!btn) return;
 
@@ -1391,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const res = await fetch('/remotepanda/api/study-notes.php', {
+            const res = await fetch(remoteBaseUrl + '/api/study-notes.php', {
                 cache: 'no-store',
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1443,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const res = await fetch('/remotepanda/api/finalize-report.php', {
+            const res = await fetch(remoteBaseUrl + '/api/finalize-report.php', {
                 cache: 'no-store',
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1489,7 +1497,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function autoPushCloudReturns() {
         try {
-            const res = await fetch('/remotepanda/api/cloud-push-returned-reports.php?limit=10', {
+            const res = await fetch(remoteBaseUrl + '/api/cloud-push-returned-reports.php?limit=10', {
                 cache: 'no-store',
                 credentials: 'same-origin'
             });
@@ -1527,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', function () {
             throw new Error('Missing study ID.');
         }
         const body = Object.assign({}, payload || {}, { action: action, studyint: sid });
-        const res = await fetch('/remotepanda/api/typist-workflow.php', {
+        const res = await fetch(remoteBaseUrl + '/api/typist-workflow.php', {
             cache: 'no-store',
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1554,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (recordingStatus) {
             recordingStatus.textContent = 'Saving recording for typists...';
         }
-        const res = await fetch('/remotepanda/api/upload-dictation.php', {
+        const res = await fetch(remoteBaseUrl + '/api/upload-dictation.php', {
             cache: 'no-store',
             method: 'POST',
             body: form
@@ -1611,7 +1619,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const res = await fetch('/remotepanda/api/study-notes.php', {
+            const res = await fetch(remoteBaseUrl + '/api/study-notes.php', {
                 cache: 'no-store',
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1647,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const res = await fetch('/remotepanda/api/study-notes.php?studyint=' + encodeURIComponent(sid), { cache: 'no-store' });
+            const res = await fetch(remoteBaseUrl + '/api/study-notes.php?studyint=' + encodeURIComponent(sid), { cache: 'no-store' });
             const data = await res.json();
 
             if (!res.ok || !data.success) {
@@ -2053,7 +2061,7 @@ document.addEventListener('DOMContentLoaded', function () {
             statusEl.style.color = '#475569';
         }
 
-        openDicomModal('/remotepanda/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1', studyint);
+        openDicomModal(remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1', studyint);
 
         if (statusEl) {
             statusEl.textContent = 'Viewer opened.';

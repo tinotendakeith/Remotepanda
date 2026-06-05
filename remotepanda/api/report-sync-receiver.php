@@ -234,6 +234,14 @@ rp_remote_api_log($con, 'sync_upload_received', true, 200, 'Report order package
     'extract_message' => $extractMessage
 ));
 
+$scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+$remoteBaseUrl = '';
+$apiPos = strpos($scriptName, '/api/');
+if ($apiPos !== false) {
+    $remoteBaseUrl = substr($scriptName, 0, $apiPos);
+}
+$remoteBaseUrl = rtrim($remoteBaseUrl, '/');
+
 rp_remote_sync_json_response(array(
     'success' => true,
     'order_uid' => $orderUid,
@@ -241,6 +249,6 @@ rp_remote_sync_json_response(array(
     'status' => $status,
     'extract_ok' => $extractOk,
     'extract_message' => $extractMessage,
-    'viewer_url' => '/remotepanda/viewer/index.php?studyint=' . rawurlencode($studyint)
+    'viewer_url' => $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode($studyint)
 ));
 ?>

@@ -80,6 +80,14 @@ function rp_remote_clinic_list_orthanc_instances(string $studyint): array
         return array('success' => false, 'error' => (string) ($instances['error'] ?? 'Could not list PACS instances.'), 'files' => array());
     }
 
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $remoteBaseUrl = '';
+    $apiPos = strpos($scriptName, '/api/');
+    if ($apiPos !== false) {
+        $remoteBaseUrl = substr($scriptName, 0, $apiPos);
+    }
+    $remoteBaseUrl = rtrim($remoteBaseUrl, '/');
+
     $files = array();
     $index = 1;
     foreach ($instances['data'] as $instance) {
@@ -102,7 +110,7 @@ function rp_remote_clinic_list_orthanc_instances(string $studyint): array
             'size' => 0,
             'source' => 'orthanc',
             'orthanc_instance_id' => $id,
-            'url' => '/remotepanda/api/dicom-file.php?studyint=' . rawurlencode($studyint) . '&orthanc_instance=' . rawurlencode($id)
+            'url' => $remoteBaseUrl . '/api/dicom-file.php?studyint=' . rawurlencode($studyint) . '&orthanc_instance=' . rawurlencode($id)
         );
         $index++;
     }

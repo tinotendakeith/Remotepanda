@@ -486,6 +486,12 @@ if (isset($_SESSION['success_message'])) {
 (function(){
   var busy = false;
   var lastReloadAt = 0;
+  var remoteBaseUrl = (function(){
+    var marker = '/dashboards/';
+    var path = window.location.pathname || '';
+    var pos = path.indexOf(marker);
+    return pos >= 0 ? path.slice(0, pos) : '';
+  })();
 
   function canRefresh() {
     var active = document.activeElement;
@@ -497,8 +503,8 @@ if (isset($_SESSION['success_message'])) {
     if (busy || document.hidden) return;
     busy = true;
     Promise.all([
-      fetch('/remotepanda/api/cloud-import-orders.php?limit=25', { cache: 'no-store', credentials: 'same-origin' }).then(function(r){ return r.json(); }),
-      fetch('/remotepanda/api/cloud-push-returned-reports.php?limit=10', { cache: 'no-store', credentials: 'same-origin' }).then(function(r){ return r.json(); })
+      fetch(remoteBaseUrl + '/api/cloud-import-orders.php?limit=25', { cache: 'no-store', credentials: 'same-origin' }).then(function(r){ return r.json(); }),
+      fetch(remoteBaseUrl + '/api/cloud-push-returned-reports.php?limit=10', { cache: 'no-store', credentials: 'same-origin' }).then(function(r){ return r.json(); })
     ]).then(function(results){
       var imported = results[0] && results[0].summary ? parseInt(results[0].summary.imported || 0, 10) : 0;
       var pushed = results[1] && results[1].summary ? parseInt(results[1].summary.sent || 0, 10) : 0;
