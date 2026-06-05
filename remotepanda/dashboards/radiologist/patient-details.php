@@ -11,6 +11,7 @@ include('../../functions.php');
 include('../../includes/remote_reporting_service.php');
 include('../../includes/typist_workflow_service.php');
 include('../../includes/report_template_helper.php');
+include('../../includes/api_security.php');
 $remoteScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
 $remoteBaseUrl = '';
 $remoteDashPos = strpos($remoteScriptName, '/dashboards/');
@@ -468,6 +469,9 @@ if ($patientDob !== '') {
         $patientAge = '';
     }
 }
+$viewerExpiresAt = time() + 7200;
+$viewerToken = rp_remote_create_viewer_token((string)$row['studyint'], $viewerExpiresAt);
+$viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((string)$row['studyint']) . '&embed=1&viewer_exp=' . $viewerExpiresAt . '&viewer_token=' . rawurlencode($viewerToken);
 ?>
 
 <div class="rp-study-shell">
@@ -497,7 +501,7 @@ if ($patientDob !== '') {
         <input type="hidden" name="studyint" id="studyint" value="<?php echo htmlspecialchars($row['studyint']); ?>">
 
         <div class="rp-actions">
-            <a class="rp-btn rp-btn-primary" id="openImageBtn" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/viewer/index.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>&embed=1" target="_blank" rel="noopener" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</a>
+            <a class="rp-btn rp-btn-primary" id="openImageBtn" href="<?php echo htmlspecialchars($viewerUrl); ?>" target="_blank" rel="noopener" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</a>
             <a id="downloadZipBtn" class="rp-btn rp-btn-success" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/api/download-study-package.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>" download>Download Images</a>
             <span id="imageStatus" class="rp-status"></span>
         </div>

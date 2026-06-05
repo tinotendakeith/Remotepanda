@@ -5,7 +5,6 @@ require_once __DIR__ . '/../includes/api_security.php';
 require_once __DIR__ . '/../includes/clinic_orthanc_bridge.php';
 
 rp_remote_require_global_api_enabled($con);
-rp_remote_require_login($con);
 
 if (!rp_remote_feature_enabled($con, 'feature_remote_dicom_stream_enabled', true)) {
     rp_remote_api_log($con, 'feature_blocked', false, 503, 'DICOM stream disabled');
@@ -19,9 +18,23 @@ if ($studyint === '') {
 }
 
 rp_remote_api_log($con, 'request_received', true, 200, 'List study files request', $studyint);
-rp_remote_require_study_access($con, $studyint);
+$viewerTokenAuth = rp_remote_require_login_or_viewer_token($con, $studyint);
+if (!$viewerTokenAuth) {
+    rp_remote_require_study_access($con, $studyint);
+}
 
 $orthanc = rp_remote_clinic_list_orthanc_instances($studyint);
+if (!empty($orthanc['files']) && $viewerTokenAuth) {
+    $viewerExp = isset($_GET['viewer_exp']) ? (string)$_GET['viewer_exp'] : '';
+    $viewerToken = isset($_GET['viewer_token']) ? (string)$_GET['viewer_token'] : '';
+    $viewerQuery = '&viewer_exp=' . rawurlencode($viewerExp) . '&viewer_token=' . rawurlencode($viewerToken);
+    foreach ($orthanc['files'] as &$file) {
+        if (isset($file['url']) && is_string($file['url'])) {
+            $file['url'] .= $viewerQuery;
+        }
+    }
+    unset($file);
+}
 if (empty($orthanc['success']) || empty($orthanc['files'])) {
     rp_remote_api_log($con, 'list_study_files_orthanc_missing', false, 404, 'No PACS study was found', $studyint, ['orthanc_error' => (string) ($orthanc['error'] ?? '')]);
     rp_remote_json_response(['success' => false, 'error' => 'No PACS study was found for this Radpanda study'], 404);

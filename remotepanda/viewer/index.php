@@ -61,6 +61,11 @@ body.embed .status{margin-left:auto}
 <script>
 (function(){
   const studyint = <?php echo json_encode($studyint, JSON_UNESCAPED_SLASHES); ?>;
+  const viewerExp = <?php echo json_encode(isset($_GET['viewer_exp']) ? (string)$_GET['viewer_exp'] : ''); ?>;
+  const viewerToken = <?php echo json_encode(isset($_GET['viewer_token']) ? (string)$_GET['viewer_token'] : ''); ?>;
+  const viewerAuthQuery = viewerExp && viewerToken
+    ? '&viewer_exp=' + encodeURIComponent(viewerExp) + '&viewer_token=' + encodeURIComponent(viewerToken)
+    : '';
   const statusEl = document.getElementById('status');
   const metaEl = document.getElementById('meta');
   const prevBtn = document.getElementById('prev');
@@ -414,7 +419,7 @@ body.embed .status{margin-left:auto}
     resetBtn.addEventListener('click', function(){ try{ cornerstone.reset(viewer); render(); }catch(e){} });
 
     setStatus('Loading file list...');
-    fetch(viewerAppBaseUrl + '/api/list-study-files.php?studyint=' + encodeURIComponent(studyint), { cache:'no-store' })
+    fetch(viewerAppBaseUrl + '/api/list-study-files.php?studyint=' + encodeURIComponent(studyint) + viewerAuthQuery, { cache:'no-store' })
       .then(function(res){
         return res.text().then(function(raw){
           var data = null;

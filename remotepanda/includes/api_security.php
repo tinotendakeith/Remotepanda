@@ -181,6 +181,48 @@ function rp_remote_require_login(mysqli $con): void
     }
 }
 
+function rp_remote_viewer_token_secret(): string
+{
+    $cfg = function_exists('rp_remote_database_config') ? rp_remote_database_config() : array();
+    return hash('sha256', implode('|', array(
+        (string)($cfg['username'] ?? ''),
+        (string)($cfg['password'] ?? ''),
+        (string)($cfg['database'] ?? ''),
+        __DIR__
+    )));
+}
+
+function rp_remote_create_viewer_token(string $studyint, int $expiresAt): string
+{
+    return hash_hmac('sha256', $studyint . '|' . $expiresAt, rp_remote_viewer_token_secret());
+}
+
+function rp_remote_viewer_token_valid(string $studyint): bool
+{
+    $token = isset($_GET['viewer_token']) ? trim((string)$_GET['viewer_token']) : '';
+    $expiresAt = isset($_GET['viewer_exp']) ? (int)$_GET['viewer_exp'] : 0;
+    if ($studyint === '' || $token === '' || $expiresAt < time()) {
+        return false;
+    }
+    $expected = rp_remote_create_viewer_token($studyint, $expiresAt);
+    return hash_equals($expected, $token);
+}
+
+function rp_remote_require_login_or_viewer_token(mysqli $con, string $studyint): bool
+{
+    if (rp_remote_current_user()) {
+        return false;
+    }
+
+    if (rp_remote_viewer_token_valid($studyint)) {
+        rp_remote_api_log($con, 'viewer_token_auth', true, 200, 'Viewer token accepted', $studyint);
+        return true;
+    }
+
+    rp_remote_api_log($con, 'auth_failed', false, 401, 'Unauthenticated request');
+    rp_remote_json_response(['success' => false, 'error' => 'Unauthorized'], 401);
+}
+
 function rp_remote_is_admin_or_supervisor(): bool
 {
     $type = rp_remote_current_user_type();
