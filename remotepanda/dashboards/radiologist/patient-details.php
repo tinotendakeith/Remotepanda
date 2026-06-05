@@ -497,7 +497,7 @@ if ($patientDob !== '') {
         <input type="hidden" name="studyint" id="studyint" value="<?php echo htmlspecialchars($row['studyint']); ?>">
 
         <div class="rp-actions">
-            <button class="rp-btn rp-btn-primary" type="button" id="openImageBtn" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</button>
+            <a class="rp-btn rp-btn-primary" id="openImageBtn" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/viewer/index.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>&embed=1" target="_blank" rel="noopener" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</a>
             <a id="downloadZipBtn" class="rp-btn rp-btn-success" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/api/download-study-package.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>" download>Download Images</a>
             <span id="imageStatus" class="rp-status"></span>
         </div>
@@ -956,6 +956,20 @@ if ($patientDob !== '') {
         });
     });
 </script>
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var openBtn = document.getElementById("openImageBtn");
+  var modal = document.getElementById("dicomViewerModal");
+  var frame = document.getElementById("dicomViewerFrame");
+  if (!openBtn || !modal || !frame) return;
+  openBtn.addEventListener("click", function (event) {
+    event.preventDefault();
+    frame.src = openBtn.href;
+    modal.style.display = "block";
+  });
+});
 </script>
 
 <script>
@@ -2045,7 +2059,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', function (event) {
+        event.preventDefault();
         const studyint = resolveStudyint(this.dataset.studyint || '');
         const statusEl = document.getElementById('imageStatus');
         if (!studyint) {
