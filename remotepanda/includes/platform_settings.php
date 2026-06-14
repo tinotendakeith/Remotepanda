@@ -30,7 +30,7 @@ if (!function_exists('rp_remote_has_column')) {
             'feature_remote_strict_study_acl' => '0',
             'feature_remote_strict_study_acl_mode' => 'off',
             'feature_remote_strict_study_acl_fail_open' => '1',
-            'pacs_base_directory' => 'C:/Sante Server DB',
+            'pacs_base_directory' => rp_remote_default_pacs_base_directory(),
             'pacs_allow_recursive_lookup' => '1',
         ];
 
@@ -92,9 +92,27 @@ if (!function_exists('rp_remote_has_column')) {
         return rp_remote_feature_enabled($con, 'feature_remote_strict_study_acl_fail_open', true);
     }
 
+    function rp_remote_default_pacs_base_directory(): string
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return 'C:/Sante Server DB';
+        }
+
+        return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'pacs';
+    }
+
     function rp_remote_get_pacs_base_directory(mysqli $con): string
     {
-        return trim(rp_remote_setting_get($con, 'pacs_base_directory', 'C:/Sante Server DB'));
+        $configured = trim(rp_remote_setting_get($con, 'pacs_base_directory', rp_remote_default_pacs_base_directory()));
+        if ($configured === '') {
+            return rp_remote_default_pacs_base_directory();
+        }
+
+        if (DIRECTORY_SEPARATOR !== '\\' && preg_match('/^[A-Za-z]:[\\\\\\/]/', $configured)) {
+            return rp_remote_default_pacs_base_directory();
+        }
+
+        return rtrim($configured, "\\/");
     }
 
     function rp_remote_allow_recursive_lookup(mysqli $con): bool

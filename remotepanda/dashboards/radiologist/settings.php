@@ -34,9 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $flash = 'Only admin users can change system settings.';
         $flashType = 'danger';
     } else {
-        $pacsBase = trim((string)($_POST['pacs_base_directory'] ?? 'C:/Sante Server DB'));
+        $pacsBase = trim((string)($_POST['pacs_base_directory'] ?? rp_remote_default_pacs_base_directory()));
         if ($pacsBase === '') {
-            $pacsBase = 'C:/Sante Server DB';
+            $pacsBase = rp_remote_default_pacs_base_directory();
         }
 
         $aclMode = strtolower(trim((string)($_POST['feature_remote_strict_study_acl_mode'] ?? 'off')));
@@ -142,7 +142,7 @@ include_once('../../includes/radiographer-sidebar.php');
         <div class="rp-row">
           <label for="pacs_base_directory">PACS base directory</label>
           <input type="text" class="form-control" id="pacs_base_directory" name="pacs_base_directory" value="<?php echo h($pacsBaseDirectory); ?>" <?php echo $isAdmin ? '' : 'disabled'; ?> >
-          <small class="rp-muted">Example: `C:/Sante Server DB`</small>
+          <small class="rp-muted">Default on this server: <?php echo h(rp_remote_default_pacs_base_directory()); ?></small>
         </div>
         <label class="rp-switch">
           <input type="checkbox" name="pacs_allow_recursive_lookup" <?php echo checkedAttr($featureRecursiveLookup); ?> <?php echo $isAdmin ? '' : 'disabled'; ?>>

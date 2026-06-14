@@ -2080,7 +2080,7 @@ document.addEventListener('DOMContentLoaded', function () {
             statusEl.style.color = '#475569';
         }
 
-        openDicomModal(remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1', studyint);
+        openDicomModal(this.href || (remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1'), studyint);
 
         if (statusEl) {
             statusEl.textContent = 'Viewer opened.';
