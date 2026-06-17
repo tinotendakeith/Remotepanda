@@ -36,7 +36,70 @@ if (!empty($orthanc['files']) && $viewerTokenAuth) {
     unset($file);
 }
 if (empty($orthanc['success']) || empty($orthanc['files'])) {
-    rp_remote_api_log($con, 'list_study_files_orthanc_missing', false, 404, 'No PACS study was found', $studyint, ['orthanc_error' => (string) ($orthanc['error'] ?? '')]);
+    $studyFolder = rp_remote_resolve_study_folder($con, $studyint);
+    $localFiles = array();
+    if ($studyFolder !== false) {
+        $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+        $remoteBaseUrl = '';
+        $apiPos = strpos($scriptName, '/api/');
+        if ($apiPos !== false) {
+            $remoteBaseUrl = substr($scriptName, 0, $apiPos);
+        }
+        $remoteBaseUrl = rtrim($remoteBaseUrl, '/');
+
+        try {
+            $it = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($studyFolder, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            foreach ($it as $file) {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $real = $file->getRealPath();
+                if ($real === false || basename($real) === '' || strtolower(pathinfo($real, PATHINFO_EXTENSION)) === 'zip') {
+                    continue;
+                }
+                $relative = ltrim(str_replace('\\', '/', substr($real, strlen($studyFolder))), '/');
+                if ($relative === '') {
+                    continue;
+                }
+                $localFiles[] = array(
+                    'name' => basename($real),
+                    'path' => $relative,
+                    'size' => (int) $file->getSize(),
+                    'source' => 'local_package',
+                    'url' => $remoteBaseUrl . '/api/dicom-file.php?studyint=' . rawurlencode($studyint) . '&path=' . rawurlencode($relative)
+                );
+            }
+        } catch (Exception $e) {
+            $localFiles = array();
+        }
+    }
+
+    if (!empty($localFiles) && $viewerTokenAuth) {
+        $viewerExp = isset($_GET['viewer_exp']) ? (string)$_GET['viewer_exp'] : '';
+        $viewerToken = isset($_GET['viewer_token']) ? (string)$_GET['viewer_token'] : '';
+        $viewerQuery = '&viewer_exp=' . rawurlencode($viewerExp) . '&viewer_token=' . rawurlencode($viewerToken);
+        foreach ($localFiles as &$file) {
+            $file['url'] .= $viewerQuery;
+        }
+        unset($file);
+    }
+
+    if (!empty($localFiles)) {
+        rp_remote_api_log($con, 'list_study_files_local_success', true, 200, 'Imported package DICOM files listed', $studyint, ['count' => count($localFiles), 'orthanc_error' => (string) ($orthanc['error'] ?? '')]);
+        rp_remote_json_response([
+            'success' => true,
+            'studyint' => $studyint,
+            'source' => 'local_package',
+            'count' => count($localFiles),
+            'skipped_non_renderable' => 0,
+            'files' => $localFiles
+        ]);
+    }
+
+    rp_remote_api_log($con, 'list_study_files_missing', false, 404, 'No PACS or imported package study was found', $studyint, ['orthanc_error' => (string) ($orthanc['error'] ?? '')]);
     rp_remote_json_response(['success' => false, 'error' => 'No PACS study was found for this Radpanda study'], 404);
 }
 

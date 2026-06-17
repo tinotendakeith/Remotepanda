@@ -178,19 +178,7 @@ if (!move_uploaded_file($_FILES['study_package']['tmp_name'], $zipPath)) {
 }
 
 $extractOk = false;
-$extractMessage = '';
-if (class_exists('ZipArchive')) {
-    $zip = new ZipArchive();
-    if ($zip->open($zipPath) === true) {
-        $extractOk = $zip->extractTo($studyDir);
-        $zip->close();
-        $extractMessage = $extractOk ? 'Extracted.' : 'ZIP extraction failed.';
-    } else {
-        $extractMessage = 'Could not open ZIP package.';
-    }
-} else {
-    $extractMessage = 'ZipArchive is not enabled on the receiver.';
-}
+$extractMessage = 'ZIP stored. Extraction deferred.';
 
 rp_remote_sync_upsert_study($con, $payload);
 
@@ -206,7 +194,7 @@ $radiologistId = (int) ($payload['radiologist_id'] ?? 0);
 $radiologistUsername = (string) ($payload['radiologist_username'] ?? '');
 $invoiceId = (int) ($payload['invoice_id'] ?? 0);
 $packageSize = (int) ($_FILES['study_package']['size'] ?? filesize($zipPath));
-$status = $extractOk ? 'received' : 'received_zip_only';
+$status = 'received_zip_only';
 
 $stmt = mysqli_prepare($con, "INSERT INTO remote_report_orders (
         order_uid, clinic_id, branch, studyint, accession_number, patient_id, patient_name, modality, procedure_name,

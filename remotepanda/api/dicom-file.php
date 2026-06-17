@@ -11,9 +11,10 @@ if (!rp_remote_feature_enabled($con, 'feature_remote_dicom_stream_enabled', true
 
 $studyint = isset($_GET['studyint']) ? trim((string)$_GET['studyint']) : '';
 $orthancInstance = isset($_GET['orthanc_instance']) ? trim((string)$_GET['orthanc_instance']) : '';
+$relativePath = isset($_GET['path']) ? trim((string)$_GET['path']) : '';
 
-if ($studyint === '' || $orthancInstance === '') {
-    rp_remote_api_log($con, 'validation_failed', false, 400, 'Missing studyint/orthanc_instance', $studyint);
+if ($studyint === '' || ($orthancInstance === '' && $relativePath === '')) {
+    rp_remote_api_log($con, 'validation_failed', false, 400, 'Missing studyint/DICOM locator', $studyint);
     http_response_code(400);
     exit('Missing required PACS parameters');
 }
@@ -24,5 +25,38 @@ if (!$viewerTokenAuth) {
     rp_remote_require_study_access($con, $studyint);
 }
 
-rp_remote_api_log($con, 'orthanc_stream_requested', true, 200, 'PACS DICOM instance request', $studyint, ['orthanc_instance' => $orthancInstance]);
-rp_remote_clinic_stream_orthanc_instance($studyint, $orthancInstance);
+if ($orthancInstance !== '') {
+    rp_remote_api_log($con, 'orthanc_stream_requested', true, 200, 'PACS DICOM instance request', $studyint, ['orthanc_instance' => $orthancInstance]);
+    rp_remote_clinic_stream_orthanc_instance($studyint, $orthancInstance);
+}
+
+$studyFolder = rp_remote_resolve_study_folder($con, $studyint);
+if ($studyFolder === false) {
+    rp_remote_api_log($con, 'local_stream_missing_folder', false, 404, 'Imported package folder not found', $studyint);
+    http_response_code(404);
+    exit('Study folder not found');
+}
+
+$candidate = $studyFolder . DIRECTORY_SEPARATOR . str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, $relativePath);
+$real = realpath($candidate);
+$baseReal = realpath($studyFolder);
+if ($real === false || $baseReal === false || strpos($real, rtrim($baseReal, "\\/") . DIRECTORY_SEPARATOR) !== 0 || !is_file($real) || !is_readable($real)) {
+    rp_remote_api_log($con, 'local_stream_forbidden_or_missing', false, 404, 'Imported package DICOM file not found', $studyint, ['path' => $relativePath]);
+    http_response_code(404);
+    exit('DICOM file not found');
+}
+
+rp_remote_api_log($con, 'local_stream_success', true, 200, 'Imported package DICOM file streamed', $studyint, ['path' => $relativePath]);
+
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
+header('Content-Type: application/dicom');
+header('Content-Length: ' . filesize($real));
+header('Content-Disposition: inline; filename="' . basename($real) . '"');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+readfile($real);
+exit;
