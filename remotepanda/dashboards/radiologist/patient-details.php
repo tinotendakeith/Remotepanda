@@ -476,7 +476,7 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
 
 <div class="rp-study-shell">
     <div>
-        <h2 class="rp-study-title"><?php echo htmlspecialchars($row['Name']); ?></h2>
+        <h2 class="rp-study-title"><?php echo htmlspecialchars((string)$row['Name']); ?></h2>
         <?php if ($orderUid !== '' || $orderStatus !== '' || $returnLabel !== ''): ?>
             <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                 <span class="rp-order-pill"><?php echo htmlspecialchars($orderStatus !== '' ? strtoupper($orderStatus) : 'REPORT ORDER'); ?><?php echo $orderUid !== '' ? ' · ' . htmlspecialchars($orderUid) : ''; ?></span>
@@ -487,21 +487,21 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
         <?php endif; ?>
 
         <div class="rp-facts">
-            <div class="k">Study UID</div><div class="v"><?php echo htmlspecialchars($row['studyint']); ?></div>
-            <div class="k">Accession Number</div><div class="v"><?php echo htmlspecialchars($row['accession_number']); ?></div>
-            <div class="k">Date of Birth</div><div class="v"><?php echo htmlspecialchars($row['date_of_birth']); ?></div>
+            <div class="k">Study UID</div><div class="v"><?php echo htmlspecialchars((string)$row['studyint']); ?></div>
+            <div class="k">Accession Number</div><div class="v"><?php echo htmlspecialchars((string)$row['accession_number']); ?></div>
+            <div class="k">Date of Birth</div><div class="v"><?php echo htmlspecialchars((string)$row['date_of_birth']); ?></div>
             <div class="k">Age</div><div class="v"><?php echo $patientAge !== '' ? htmlspecialchars($patientAge) : '-'; ?></div>
-            <div class="k">Gender</div><div class="v"><?php echo htmlspecialchars($row['gender']); ?></div>
-            <div class="k">Requesting Physician</div><div class="v"><?php echo htmlspecialchars($row['requesting_physician']); ?></div>
-            <div class="k">Requested Procedure</div><div class="v"><?php echo htmlspecialchars($row['requested_procedure']); ?></div>
-            <div class="k">Technician</div><div class="v"><?php echo htmlspecialchars($row['technician_name']); ?></div>
-            <div class="k">Study Date</div><div class="v"><?php echo htmlspecialchars($row['start_date']); ?></div>
+            <div class="k">Gender</div><div class="v"><?php echo htmlspecialchars((string)$row['gender']); ?></div>
+            <div class="k">Requesting Physician</div><div class="v"><?php echo htmlspecialchars((string)$row['requesting_physician']); ?></div>
+            <div class="k">Requested Procedure</div><div class="v"><?php echo htmlspecialchars((string)$row['requested_procedure']); ?></div>
+            <div class="k">Technician</div><div class="v"><?php echo htmlspecialchars((string)$row['technician_name']); ?></div>
+            <div class="k">Study Date</div><div class="v"><?php echo htmlspecialchars((string)$row['start_date']); ?></div>
         </div>
 
-        <input type="hidden" name="studyint" id="studyint" value="<?php echo htmlspecialchars($row['studyint']); ?>">
+        <input type="hidden" name="studyint" id="studyint" value="<?php echo htmlspecialchars((string)$row['studyint']); ?>">
 
         <div class="rp-actions">
-            <a class="rp-btn rp-btn-primary" id="openImageBtn" href="<?php echo htmlspecialchars($viewerUrl); ?>" target="_blank" rel="noopener" data-studyint="<?php echo htmlspecialchars($row['studyint']); ?>">Open Images</a>
+            <button class="rp-btn rp-btn-primary" type="button" id="openImageBtn" data-viewer-url="<?php echo htmlspecialchars($viewerUrl); ?>" data-studyint="<?php echo htmlspecialchars((string)$row['studyint']); ?>">Open Images</button>
             <a id="downloadZipBtn" class="rp-btn rp-btn-success" href="<?php echo htmlspecialchars($remoteBaseUrl); ?>/api/download-study-package.php?studyint=<?php echo rawurlencode((string)$row['studyint']); ?>" download>Download Images</a>
             <span id="imageStatus" class="rp-status"></span>
         </div>
@@ -510,9 +510,9 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
     <div class="rp-right-card">
         <h3 class="rp-right-title">Radiologist Quick Context</h3>
         <div class="rp-mini-grid">
-            <div class="rp-mini"><div class="k">Procedure</div><div class="v"><?php echo htmlspecialchars($row['requested_procedure']); ?></div></div>
-            <div class="rp-mini"><div class="k">Referrer</div><div class="v"><?php echo htmlspecialchars($row['requesting_physician']); ?></div></div>
-            <div class="rp-mini"><div class="k">Patient Sex</div><div class="v"><?php echo htmlspecialchars($row['gender']); ?></div></div>
+            <div class="rp-mini"><div class="k">Procedure</div><div class="v"><?php echo htmlspecialchars((string)$row['requested_procedure']); ?></div></div>
+            <div class="rp-mini"><div class="k">Referrer</div><div class="v"><?php echo htmlspecialchars((string)$row['requesting_physician']); ?></div></div>
+            <div class="rp-mini"><div class="k">Patient Sex</div><div class="v"><?php echo htmlspecialchars((string)$row['gender']); ?></div></div>
             <div class="rp-mini"><div class="k">Patient Age</div><div class="v"><?php echo $patientAge !== '' ? htmlspecialchars($patientAge) : '-'; ?></div></div>
         </div>
 
@@ -960,20 +960,6 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
         });
     });
 </script>
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  var openBtn = document.getElementById("openImageBtn");
-  var modal = document.getElementById("dicomViewerModal");
-  var frame = document.getElementById("dicomViewerFrame");
-  if (!openBtn || !modal || !frame) return;
-  openBtn.addEventListener("click", function (event) {
-    event.preventDefault();
-    frame.src = openBtn.href;
-    modal.style.display = "block";
-  });
-});
 </script>
 
 <script>
@@ -2080,7 +2066,8 @@ document.addEventListener('DOMContentLoaded', function () {
             statusEl.style.color = '#475569';
         }
 
-        openDicomModal(this.href || (remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1'), studyint);
+        const viewerUrl = this.dataset.viewerUrl || (remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1');
+        openDicomModal(viewerUrl, studyint);
 
         if (statusEl) {
             statusEl.textContent = 'Viewer opened.';
