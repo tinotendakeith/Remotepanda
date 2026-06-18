@@ -8,8 +8,34 @@ function rp_remote_reporting_has_column(mysqli $con, string $table, string $colu
     return $res instanceof mysqli_result && mysqli_num_rows($res) > 0;
 }
 
+function rp_remote_reporting_has_index(mysqli $con, string $table, string $index): bool
+{
+    $tableEsc = mysqli_real_escape_string($con, $table);
+    $indexEsc = mysqli_real_escape_string($con, $index);
+    $res = @mysqli_query($con, "SHOW INDEX FROM `{$tableEsc}` WHERE Key_name = '{$indexEsc}'");
+    return $res instanceof mysqli_result && mysqli_num_rows($res) > 0;
+}
+
+function rp_remote_reporting_add_index(mysqli $con, string $table, string $index, string $columns): void
+{
+    if (!rp_remote_reporting_has_index($con, $table, $index)) {
+        @mysqli_query($con, "ALTER TABLE `{$table}` ADD INDEX `{$index}` ({$columns})");
+    }
+}
+
 function rp_remote_reporting_ensure_schema(mysqli $con): void
 {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $cacheKey = 'rp_remote_reporting_schema_checked_at_v3';
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION[$cacheKey]) && (time() - (int)$_SESSION[$cacheKey]) < 86400) {
+        $checked = true;
+        return;
+    }
+
     @mysqli_query($con, "CREATE TABLE IF NOT EXISTS remote_report_orders (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         order_uid VARCHAR(80) NOT NULL UNIQUE,
@@ -68,6 +94,20 @@ function rp_remote_reporting_ensure_schema(mysqli $con): void
         KEY idx_return_status (status, next_retry_at),
         KEY idx_return_studyint (studyint)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    rp_remote_reporting_add_index($con, 'remote_report_orders', 'idx_remote_orders_accession', 'accession_number');
+    rp_remote_reporting_add_index($con, 'remote_report_orders', 'idx_remote_orders_username_status', 'radiologist_username, status');
+    rp_remote_reporting_add_index($con, 'remote_report_orders', 'idx_remote_orders_status_viewed', 'status, viewed_at');
+    rp_remote_reporting_add_index($con, 'study', 'idx_study_accession_number', 'accession_number');
+    rp_remote_reporting_add_index($con, 'study', 'idx_study_studyint', 'studyint');
+    rp_remote_reporting_add_index($con, 'study', 'idx_study_assigned_radiologist', 'assigned_radiologist_id');
+    rp_remote_reporting_add_index($con, 'study', 'idx_study_reporting_radiologist', 'reporting_radiologist');
+    rp_remote_reporting_add_index($con, 'study', 'idx_study_status', 'status');
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION[$cacheKey] = time();
+    }
+    $checked = true;
 }
 
 function rp_remote_reporting_current_user(): array

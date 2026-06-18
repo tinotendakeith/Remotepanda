@@ -4,6 +4,17 @@ require_once __DIR__ . '/remote_reporting_service.php';
 
 function rp_typist_workflow_ensure_schema(mysqli $con): void
 {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $cacheKey = 'rp_typist_workflow_schema_checked_at_v2';
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION[$cacheKey]) && (time() - (int)$_SESSION[$cacheKey]) < 86400) {
+        $checked = true;
+        return;
+    }
+
     @mysqli_query($con, "CREATE TABLE IF NOT EXISTS report_dictations (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         order_uid VARCHAR(80) NULL,
@@ -57,6 +68,11 @@ function rp_typist_workflow_ensure_schema(mysqli $con): void
         KEY idx_review_order (order_uid),
         KEY idx_review_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION[$cacheKey] = time();
+    }
+    $checked = true;
 }
 
 function rp_typist_workflow_storage_root(): string

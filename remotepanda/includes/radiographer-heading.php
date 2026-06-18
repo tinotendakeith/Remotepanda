@@ -232,41 +232,52 @@ if ($rpIsRadiologistHeader && isset($con) && $con instanceof mysqli) {
         @include_once(__DIR__ . '/typist_workflow_service.php');
     }
     if (function_exists('rp_remote_reporting_current_user') && function_exists('rp_remote_reporting_assignment_sql') && function_exists('rp_remote_reporting_bind')) {
-        @rp_remote_reporting_ensure_schema($con);
-        if (function_exists('rp_typist_workflow_ensure_schema')) {
-            @rp_typist_workflow_ensure_schema($con);
-        }
         $rpHeaderReporter = rp_remote_reporting_current_user();
-        $rpHeaderAssignment = rp_remote_reporting_assignment_sql($rpHeaderReporter, 's', 'r');
-        $rpHeaderJoin = "LEFT JOIN remote_report_orders r ON r.id = (
-            SELECT rr.id FROM remote_report_orders rr
-            WHERE rr.studyint = s.studyint OR rr.accession_number = CAST(s.accession_number AS CHAR)
-            ORDER BY rr.id DESC LIMIT 1
-        )";
-        $rpHeaderSql = "SELECT
-            SUM(CASE WHEN r.viewed_at IS NULL AND COALESCE(r.status, s.status) IN ('received','sent_to_cloud','Awaiting Report') THEN 1 ELSE 0 END) AS new_count,
-            SUM(CASE WHEN s.status = 'In Progress' OR r.status IN ('in_progress','dictated','with_typist','needs_typist_edits') THEN 1 ELSE 0 END) AS progress_count,
-            SUM(CASE WHEN d.status = 'typed_draft_ready' THEN 1 ELSE 0 END) AS drafts_count,
-            SUM(CASE WHEN s.status = 'Finalized' OR r.status = 'reported' THEN 1 ELSE 0 END) AS finalized_count,
-            SUM(CASE WHEN ro.status = 'queued' THEN 1 ELSE 0 END) AS return_queue_count
-            FROM study s
-            {$rpHeaderJoin}
-            LEFT JOIN report_typist_drafts d ON d.studyint = s.studyint
-            LEFT JOIN remote_report_return_outbox ro ON ro.order_uid = r.order_uid
-            WHERE {$rpHeaderAssignment['sql']}";
-        $rpHeaderStmt = @mysqli_prepare($con, $rpHeaderSql);
-        if ($rpHeaderStmt) {
-            rp_remote_reporting_bind($rpHeaderStmt, $rpHeaderAssignment['types'], $rpHeaderAssignment['params']);
-            @mysqli_stmt_execute($rpHeaderStmt);
-            $rpHeaderRes = @mysqli_stmt_get_result($rpHeaderStmt);
-            if ($rpHeaderRes && ($rpHeaderRow = mysqli_fetch_assoc($rpHeaderRes))) {
-                $rpRadiologistHeaderCounts['new'] = (int)($rpHeaderRow['new_count'] ?? 0);
-                $rpRadiologistHeaderCounts['progress'] = (int)($rpHeaderRow['progress_count'] ?? 0);
-                $rpRadiologistHeaderCounts['drafts'] = (int)($rpHeaderRow['drafts_count'] ?? 0);
-                $rpRadiologistHeaderCounts['finalized'] = (int)($rpHeaderRow['finalized_count'] ?? 0);
-                $rpRadiologistHeaderCounts['return_queue'] = (int)($rpHeaderRow['return_queue_count'] ?? 0);
+        $rpHeaderCacheKey = 'rp_radiologist_header_counts_' . md5((string)($rpHeaderReporter['id'] ?? '') . '|' . (string)($rpHeaderReporter['username'] ?? ''));
+        $rpHeaderCountsFresh = false;
+        if (isset($_SESSION[$rpHeaderCacheKey]) && is_array($_SESSION[$rpHeaderCacheKey])) {
+            $rpHeaderCached = $_SESSION[$rpHeaderCacheKey];
+            if ((time() - (int)($rpHeaderCached['time'] ?? 0)) < 30 && isset($rpHeaderCached['counts']) && is_array($rpHeaderCached['counts'])) {
+                $rpRadiologistHeaderCounts = array_merge($rpRadiologistHeaderCounts, $rpHeaderCached['counts']);
+                $rpHeaderCountsFresh = true;
             }
-            @mysqli_stmt_close($rpHeaderStmt);
+        }
+
+        if (!$rpHeaderCountsFresh) {
+            @rp_remote_reporting_ensure_schema($con);
+            if (function_exists('rp_typist_workflow_ensure_schema')) {
+                @rp_typist_workflow_ensure_schema($con);
+            }
+            $rpHeaderAssignment = rp_remote_reporting_assignment_sql($rpHeaderReporter, 's', 'r');
+            $rpHeaderSql = "SELECT
+                SUM(CASE WHEN r.viewed_at IS NULL AND COALESCE(r.status, s.status) IN ('received','sent_to_cloud','Awaiting Report') THEN 1 ELSE 0 END) AS new_count,
+                SUM(CASE WHEN s.status = 'In Progress' OR r.status IN ('in_progress','dictated','with_typist','needs_typist_edits') THEN 1 ELSE 0 END) AS progress_count,
+                SUM(CASE WHEN d.status = 'typed_draft_ready' THEN 1 ELSE 0 END) AS drafts_count,
+                SUM(CASE WHEN s.status = 'Finalized' OR r.status = 'reported' THEN 1 ELSE 0 END) AS finalized_count,
+                SUM(CASE WHEN ro.status = 'queued' THEN 1 ELSE 0 END) AS return_queue_count
+                FROM remote_report_orders r
+                LEFT JOIN study s ON s.studyint = r.studyint
+                LEFT JOIN report_typist_drafts d ON d.studyint = r.studyint
+                LEFT JOIN remote_report_return_outbox ro ON ro.order_uid = r.order_uid
+                WHERE {$rpHeaderAssignment['sql']}";
+            $rpHeaderStmt = @mysqli_prepare($con, $rpHeaderSql);
+            if ($rpHeaderStmt) {
+                rp_remote_reporting_bind($rpHeaderStmt, $rpHeaderAssignment['types'], $rpHeaderAssignment['params']);
+                @mysqli_stmt_execute($rpHeaderStmt);
+                $rpHeaderRes = @mysqli_stmt_get_result($rpHeaderStmt);
+                if ($rpHeaderRes && ($rpHeaderRow = mysqli_fetch_assoc($rpHeaderRes))) {
+                    $rpRadiologistHeaderCounts['new'] = (int)($rpHeaderRow['new_count'] ?? 0);
+                    $rpRadiologistHeaderCounts['progress'] = (int)($rpHeaderRow['progress_count'] ?? 0);
+                    $rpRadiologistHeaderCounts['drafts'] = (int)($rpHeaderRow['drafts_count'] ?? 0);
+                    $rpRadiologistHeaderCounts['finalized'] = (int)($rpHeaderRow['finalized_count'] ?? 0);
+                    $rpRadiologistHeaderCounts['return_queue'] = (int)($rpHeaderRow['return_queue_count'] ?? 0);
+                    $_SESSION[$rpHeaderCacheKey] = array(
+                        'time' => time(),
+                        'counts' => $rpRadiologistHeaderCounts
+                    );
+                }
+                @mysqli_stmt_close($rpHeaderStmt);
+            }
         }
     }
 }
