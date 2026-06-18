@@ -681,7 +681,7 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
 <div id="dicomViewerModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:99999;">
                 <div style="position:absolute; top:3%; left:3%; width:94%; height:94%; background:#0b1220; border-radius:10px; overflow:hidden; border:1px solid #223047; display:flex; flex-direction:column;">
                     <div style="height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:#111827; color:#e5e7eb; flex:0 0 auto;">
-                        <strong>Online DICOM Viewer</strong>
+                        <strong>Radpanda Viewer</strong>
                         <button id="closeDicomViewerModal" type="button" style="background:#ef4444; border:none; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer;">Close</button>
                     </div>
                     <div style="display:flex; flex:1 1 auto; min-height:0;">

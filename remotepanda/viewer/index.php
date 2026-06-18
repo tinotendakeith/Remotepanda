@@ -17,7 +17,9 @@ html,body{margin:0;padding:0;height:100%;font-family:Arial,sans-serif;background
 .wrap{height:calc(100% - 52px);display:grid;grid-template-columns:180px 1fr 280px;min-height:0}
 .left{border-right:1px solid #1f2937;background:#0f172a;overflow:auto}
 main.viewer-main{display:flex;min-height:0;height:100%}
-#viewer{flex:1 1 auto;margin:8px;border:1px solid #1f2937;background:#000;min-height:200px;height:calc(100vh - 84px)}
+#viewer{flex:1 1 auto;margin:8px;border:1px solid #1f2937;background:#000;min-height:200px;height:calc(100vh - 84px);position:relative;overflow:hidden;touch-action:none}
+#rpMeasureOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20}
+#rpMeasureOverlay.active{pointer-events:auto}
 .side{border-left:1px solid #1f2937;background:#0f172a;padding:10px;overflow:auto}
 .h{padding:10px 12px;border-bottom:1px solid #1f2937;font-weight:600;font-size:13px}
 #seriesList{padding:8px}
@@ -81,14 +83,14 @@ body.embed .status{margin-left:auto}
   let currentTool = 'Wwwc';
   let isDragging = false;
   let lastPointer = null;
+  let measureOverlay = null;
+  let activeMeasure = null;
   let seriesEntries = [];
   let currentSeriesIndex = 0;
 
   function setStatus(t){ statusEl.textContent = t; }
   function disableTools(){
     toolBtns.forEach(function(btn){
-      const t = btn.dataset.tool;
-      btn.disabled = (t === 'Length' || t === 'RectangleRoi');
       btn.classList.remove('active');
     });
   }
@@ -231,6 +233,109 @@ body.embed .status{margin-left:auto}
 
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 
+  function setViewerCursor(){
+    if(!viewer) return;
+    const cursors = {
+      Wwwc: 'ew-resize',
+      Pan: 'grab',
+      Zoom: 'ns-resize',
+      Length: 'crosshair',
+      RectangleRoi: 'crosshair'
+    };
+    viewer.style.cursor = cursors[currentTool] || 'default';
+  }
+
+  function ensureMeasureOverlay(){
+    if(measureOverlay) return measureOverlay;
+    measureOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    measureOverlay.setAttribute('id', 'rpMeasureOverlay');
+    measureOverlay.setAttribute('aria-hidden', 'true');
+    viewer.appendChild(measureOverlay);
+    return measureOverlay;
+  }
+
+  function clearMeasurements(){
+    const overlay = ensureMeasureOverlay();
+    overlay.innerHTML = '';
+    activeMeasure = null;
+  }
+
+  function svgPoint(e){
+    const rect = viewer.getBoundingClientRect();
+    return {
+      x: clamp(e.clientX - rect.left, 0, rect.width),
+      y: clamp(e.clientY - rect.top, 0, rect.height)
+    };
+  }
+
+  function svgEl(name, attrs){
+    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+    Object.keys(attrs || {}).forEach(function(k){ el.setAttribute(k, attrs[k]); });
+    return el;
+  }
+
+  function setLabel(label, x, y, text){
+    label.setAttribute('x', String(x + 8));
+    label.setAttribute('y', String(Math.max(16, y - 8)));
+    label.textContent = text;
+  }
+
+  function startMeasure(e){
+    if(currentTool !== 'Length' && currentTool !== 'RectangleRoi') return false;
+    const overlay = ensureMeasureOverlay();
+    const p = svgPoint(e);
+    const group = svgEl('g', {});
+    let shape;
+    if(currentTool === 'Length'){
+      shape = svgEl('line', {
+        x1: p.x, y1: p.y, x2: p.x, y2: p.y,
+        stroke: '#38bdf8', 'stroke-width': '2'
+      });
+    } else {
+      shape = svgEl('rect', {
+        x: p.x, y: p.y, width: 0, height: 0,
+        fill: 'rgba(56,189,248,0.08)', stroke: '#38bdf8', 'stroke-width': '2'
+      });
+    }
+    const label = svgEl('text', {
+      x: p.x + 8, y: Math.max(16, p.y - 8),
+      fill: '#e0f2fe', 'font-size': '13', 'font-family': 'Arial, sans-serif',
+      'paint-order': 'stroke', stroke: '#020617', 'stroke-width': '3'
+    });
+    group.appendChild(shape);
+    group.appendChild(label);
+    overlay.appendChild(group);
+    activeMeasure = { tool: currentTool, start: p, shape: shape, label: label };
+    e.preventDefault();
+    return true;
+  }
+
+  function updateMeasure(e){
+    if(!activeMeasure) return;
+    const p = svgPoint(e);
+    const s = activeMeasure.start;
+    if(activeMeasure.tool === 'Length'){
+      activeMeasure.shape.setAttribute('x2', String(p.x));
+      activeMeasure.shape.setAttribute('y2', String(p.y));
+      const dist = Math.sqrt(Math.pow(p.x - s.x, 2) + Math.pow(p.y - s.y, 2));
+      setLabel(activeMeasure.label, p.x, p.y, Math.round(dist) + ' px');
+    } else {
+      const x = Math.min(s.x, p.x);
+      const y = Math.min(s.y, p.y);
+      const w = Math.abs(p.x - s.x);
+      const h = Math.abs(p.y - s.y);
+      activeMeasure.shape.setAttribute('x', String(x));
+      activeMeasure.shape.setAttribute('y', String(y));
+      activeMeasure.shape.setAttribute('width', String(w));
+      activeMeasure.shape.setAttribute('height', String(h));
+      setLabel(activeMeasure.label, x + w, y, Math.round(w) + ' x ' + Math.round(h) + ' px');
+    }
+  }
+
+  function finishMeasure(){
+    activeMeasure = null;
+  }
+
   function applyFallbackDrag(dx, dy){
     if(!activeImageIds.length) return;
     const vp = cornerstone.getViewport(viewer);
@@ -255,18 +360,28 @@ body.embed .status{margin-left:auto}
   function setTool(name){
     currentTool = name;
     toolBtns.forEach(function(b){ b.classList.toggle('active', b.dataset.tool === name); });
+    const overlay = ensureMeasureOverlay();
+    overlay.classList.toggle('active', name === 'Length' || name === 'RectangleRoi');
+    setViewerCursor();
 
     if(!toolsReady || typeof cornerstoneTools === 'undefined'){
       if(name === 'Length' || name === 'RectangleRoi'){
-        setStatus('Distance/ROI need Cornerstone tools to initialize.');
+        setStatus(name === 'Length' ? 'Distance tool active: drag across the image.' : 'ROI tool active: drag a box on the image.');
       } else {
-        setStatus('Fallback tool active: ' + name);
+        setStatus(name + ' tool active: drag on the image.');
       }
       return;
     }
 
     ['Wwwc','Pan','Zoom','Length','RectangleRoi'].forEach(function(t){ try{ cornerstoneTools.setToolPassive(t); }catch(e){} });
-    try{ cornerstoneTools.setToolActive(name, { mouseButtonMask: 1 }); }catch(e){ setStatus('Tool not available: ' + name); }
+    try{ cornerstoneTools.setToolActive(name, { mouseButtonMask: 1 }); }catch(e){ setStatus('Using Radpanda ' + name + ' tool.'); }
+    if(name === 'Length'){
+      setStatus('Distance tool active: drag across the image.');
+    } else if(name === 'RectangleRoi'){
+      setStatus('ROI tool active: drag a box on the image.');
+    } else {
+      setStatus(name + ' tool active: drag on the image.');
+    }
   }
 
   function groupSeries(files){
@@ -380,6 +495,7 @@ body.embed .status{margin-left:auto}
     }
 
     cornerstone.enable(viewer);
+    ensureMeasureOverlay();
     window.addEventListener('resize', resizeViewer);
     window.addEventListener('message', function(e){
       if(e && e.data && e.data.type === 'rp-viewer-resize'){
@@ -394,21 +510,28 @@ body.embed .status{margin-left:auto}
     nextBtn.addEventListener('click', function(){ if(index < activeImageIds.length - 1){ index += 1; render(); } });
     viewer.addEventListener('wheel', function(e){
       if(!activeImageIds.length) return;
+      if(currentTool === 'Zoom'){
+        applyFallbackDrag(0, e.deltaY > 0 ? 12 : -12);
+        e.preventDefault();
+        return;
+      }
       if(e.deltaY > 0 && index < activeImageIds.length - 1){ index += 1; render(); }
       else if(e.deltaY < 0 && index > 0){ index -= 1; render(); }
     });
 
     viewer.addEventListener('mousedown', function(e){
-      if(toolsReady) return;
       if(e.button !== 0) return;
+      if(startMeasure(e)) return;
       if(currentTool !== 'Wwwc' && currentTool !== 'Pan' && currentTool !== 'Zoom') return;
       isDragging = true;
       lastPointer = { x: e.clientX, y: e.clientY };
+      if(currentTool === 'Pan') viewer.style.cursor = 'grabbing';
       e.preventDefault();
     });
-    window.addEventListener('mouseup', function(){ isDragging = false; lastPointer = null; });
+    window.addEventListener('mouseup', function(){ isDragging = false; lastPointer = null; finishMeasure(); setViewerCursor(); });
     window.addEventListener('mousemove', function(e){
-      if(!isDragging || toolsReady || !lastPointer) return;
+      if(activeMeasure){ updateMeasure(e); return; }
+      if(!isDragging || !lastPointer) return;
       const dx = e.clientX - lastPointer.x;
       const dy = e.clientY - lastPointer.y;
       lastPointer = { x: e.clientX, y: e.clientY };
@@ -416,7 +539,11 @@ body.embed .status{margin-left:auto}
     });
 
     toolBtns.forEach(function(btn){ btn.addEventListener('click', function(){ setTool(btn.dataset.tool); }); });
-    resetBtn.addEventListener('click', function(){ try{ cornerstone.reset(viewer); render(); }catch(e){} });
+    resetBtn.addEventListener('click', function(){
+      clearMeasurements();
+      try{ cornerstone.reset(viewer); render(); }catch(e){}
+      setStatus('Viewer reset.');
+    });
 
     setStatus('Loading file list...');
     fetch(viewerAppBaseUrl + '/api/list-study-files.php?studyint=' + encodeURIComponent(studyint) + viewerAuthQuery, { cache:'no-store' })
