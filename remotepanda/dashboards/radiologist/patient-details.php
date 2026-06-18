@@ -716,6 +716,95 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
                 </div>
             </div>
 
+<script>
+(function () {
+    function openViewerFromButton(button) {
+        var studyint = button.getAttribute('data-studyint') || '';
+        var viewerUrl = button.getAttribute('data-viewer-url') || '';
+        var modal = document.getElementById('dicomViewerModal');
+        var frame = document.getElementById('dicomViewerFrame');
+        var status = document.getElementById('imageStatus');
+
+        if (!viewerUrl && studyint) {
+            viewerUrl = <?php echo json_encode($remoteBaseUrl); ?> + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1';
+        }
+        if (!viewerUrl) {
+            if (status) {
+                status.textContent = 'Study identifier missing.';
+                status.style.color = '#b91c1c';
+            }
+            return;
+        }
+
+        if (frame) {
+            frame.src = viewerUrl;
+        }
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        } else {
+            window.open(viewerUrl, '_blank');
+        }
+        if (status) {
+            status.textContent = 'Viewer opened.';
+            status.style.color = '#15803d';
+        }
+    }
+
+    function setReportMode(mode) {
+        var isTypist = mode === 'typist';
+        var directPanel = document.getElementById('directReportPanel');
+        var typistPanel = document.getElementById('typistWorkflowPanel');
+        var directBtn = document.getElementById('directReportModeBtn');
+        var typistBtn = document.getElementById('typistReportModeBtn');
+
+        if (directPanel) directPanel.classList.toggle('active', !isTypist);
+        if (typistPanel) typistPanel.classList.toggle('active', isTypist);
+        if (directBtn) directBtn.classList.toggle('active', !isTypist);
+        if (typistBtn) typistBtn.classList.toggle('active', isTypist);
+
+        try {
+            window.localStorage.setItem('remotepanda_reporting_mode', isTypist ? 'typist' : 'direct');
+        } catch (err) {}
+    }
+
+    document.addEventListener('click', function (event) {
+        var openButton = event.target.closest ? event.target.closest('#openImageBtn') : null;
+        if (openButton) {
+            event.preventDefault();
+            openViewerFromButton(openButton);
+            return;
+        }
+
+        var directButton = event.target.closest ? event.target.closest('#directReportModeBtn') : null;
+        if (directButton) {
+            event.preventDefault();
+            setReportMode('direct');
+            return;
+        }
+
+        var typistButton = event.target.closest ? event.target.closest('#typistReportModeBtn') : null;
+        if (typistButton) {
+            event.preventDefault();
+            setReportMode('typist');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var closeButton = document.getElementById('closeDicomViewerModal');
+        if (closeButton) {
+            closeButton.addEventListener('click', function () {
+                var modal = document.getElementById('dicomViewerModal');
+                var frame = document.getElementById('dicomViewerFrame');
+                if (frame) frame.src = '';
+                if (modal) modal.style.display = 'none';
+                document.body.style.overflow = '';
+            });
+        }
+    });
+})();
+</script>
+
 <div id="finalizeConfirmModal" class="rp-confirm-overlay" aria-hidden="true">
     <div class="rp-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="finalizeConfirmTitle">
         <h3 id="finalizeConfirmTitle" class="rp-confirm-title">Finalize Report?</h3>
@@ -966,6 +1055,9 @@ $viewerUrl = $remoteBaseUrl . '/viewer/index.php?studyint=' . rawurlencode((stri
 document.addEventListener("DOMContentLoaded", function () {
   const nameInput = document.getElementById("Name");
   const messageElement = document.getElementById("nameCheckMessage");
+  if (!nameInput || !messageElement) {
+    return;
+  }
 
   nameInput.addEventListener("input", function () {
     const name = nameInput.value.trim();
@@ -1083,6 +1175,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var select = document.getElementById('Name');
     var offset = 0; // Initial offset
 
+    if (select) {
     select.addEventListener('change', function () {
         var selectedValue = select.options[select.selectedIndex].value;
 
@@ -1120,6 +1213,7 @@ document.addEventListener("DOMContentLoaded", function () {
             xhr.send('offset=' + offset);
         }
     });
+    }
 </script>
 
 <script>
