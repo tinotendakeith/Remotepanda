@@ -1231,6 +1231,32 @@ document.addEventListener('DOMContentLoaded', function () {
     let pendingFinalize = null;
     let finalDraftTimer = null;
 
+    btn.addEventListener('click', function (event) {
+        event.preventDefault();
+        const studyint = resolveStudyint(this.dataset.studyint || '');
+        const statusEl = document.getElementById('imageStatus');
+        if (!studyint) {
+            if (statusEl) {
+                statusEl.textContent = 'Study identifier missing.';
+                statusEl.style.color = '#b91c1c';
+            }
+            return;
+        }
+
+        if (statusEl) {
+            statusEl.textContent = 'Opening viewer...';
+            statusEl.style.color = '#475569';
+        }
+
+        const viewerUrl = this.dataset.viewerUrl || (remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1');
+        openDicomModal(viewerUrl, studyint);
+
+        if (statusEl) {
+            statusEl.textContent = 'Viewer opened.';
+            statusEl.style.color = '#15803d';
+        }
+    });
+
     if (window.tinymce && finalReportTextarea) {
         tinymce.init({
             selector: '#finalReportTextarea',
@@ -2048,32 +2074,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     }
-
-    btn.addEventListener('click', function (event) {
-        event.preventDefault();
-        const studyint = resolveStudyint(this.dataset.studyint || '');
-        const statusEl = document.getElementById('imageStatus');
-        if (!studyint) {
-            if (statusEl) {
-                statusEl.textContent = 'Study identifier missing.';
-                statusEl.style.color = '#b91c1c';
-            }
-            return;
-        }
-
-        if (statusEl) {
-            statusEl.textContent = 'Opening viewer...';
-            statusEl.style.color = '#475569';
-        }
-
-        const viewerUrl = this.dataset.viewerUrl || (remoteBaseUrl + '/viewer/index.php?studyint=' + encodeURIComponent(studyint) + '&embed=1');
-        openDicomModal(viewerUrl, studyint);
-
-        if (statusEl) {
-            statusEl.textContent = 'Viewer opened.';
-            statusEl.style.color = '#15803d';
-        }
-    });
 
     if (directReportModeBtn) {
         directReportModeBtn.addEventListener('click', function () { setReportingMode('direct'); });
