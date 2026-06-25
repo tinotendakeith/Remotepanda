@@ -371,21 +371,212 @@ function rp_remote_require_study_access(mysqli $con, string $studyint): void
     }
 }
 
-function rp_remote_resolve_study_folder(mysqli $con, string $studyint)
+function rp_remote_storage_safe_name(string $value, string $fallback = 'study'): string
 {
-    $baseDirectory = rp_remote_get_pacs_base_directory($con);
-    $baseReal = realpath($baseDirectory);
-    if ($baseReal === false) {
+    $clean = preg_replace('/[^A-Za-z0-9_.-]/', '_', trim($value));
+    return $clean !== '' ? $clean : $fallback;
+}
+
+function rp_remote_folder_has_dicom_payload(string $folder): bool
+{
+    if (!is_dir($folder)) {
         return false;
     }
 
-    $direct = $baseReal . DIRECTORY_SEPARATOR . $studyint;
-    if (is_dir($direct)) {
-        $real = realpath($direct);
-        return $real !== false ? $real : false;
+    try {
+        $it = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($folder, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ($it as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+
+            $name = $file->getFilename();
+            if ($name === '' || $name[0] === '.') {
+                continue;
+            }
+
+            $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if ($extension === 'zip' || $extension === 'json' || $extension === 'txt') {
+                continue;
+            }
+
+            return true;
+        }
+    } catch (Exception $e) {
+        return false;
     }
 
-    if (!rp_remote_allow_recursive_lookup($con)) {
+    return false;
+}
+
+function rp_remote_extract_study_zip(string $zipPath, string $targetFolder): bool
+{
+    if (!class_exists('ZipArchive') || !is_file($zipPath) || !is_readable($zipPath)) {
+        return false;
+    }
+
+    if (!is_dir($targetFolder) && !@mkdir($targetFolder, 0775, true)) {
+        return false;
+    }
+
+    $targetReal = realpath($targetFolder);
+    if ($targetReal === false) {
+        return false;
+    }
+
+    $lockPath = $targetReal . DIRECTORY_SEPARATOR . '.rp_extracting';
+    if (is_file($lockPath) && (time() - (int) @filemtime($lockPath)) < 300) {
+        return false;
+    }
+
+    @file_put_contents($lockPath, (string) time());
+
+    $zip = new ZipArchive();
+    $ok = false;
+    if ($zip->open($zipPath) === true) {
+        $ok = (bool) $zip->extractTo($targetReal);
+        $zip->close();
+    }
+
+    @unlink($lockPath);
+    return $ok;
+}
+
+function rp_remote_prepare_study_folder(string $folder): void
+{
+    if (!is_dir($folder) || rp_remote_folder_has_dicom_payload($folder)) {
+        return;
+    }
+
+    $zips = glob(rtrim($folder, "\\/") . DIRECTORY_SEPARATOR . '*.zip') ?: [];
+    foreach ($zips as $zipPath) {
+        rp_remote_extract_study_zip($zipPath, $folder);
+        if (rp_remote_folder_has_dicom_payload($folder)) {
+            return;
+        }
+    }
+}
+
+function rp_remote_try_study_folder(string $folder)
+{
+    if (!is_dir($folder)) {
+        return false;
+    }
+
+    $real = realpath($folder);
+    if ($real === false) {
+        return false;
+    }
+
+    rp_remote_prepare_study_folder($real);
+    return $real;
+}
+
+function rp_remote_study_storage_candidates(mysqli $con, string $studyint): array
+{
+    $candidates = [
+        'identifiers' => [$studyint, rp_remote_storage_safe_name($studyint)],
+        'package_paths' => [],
+    ];
+
+    $studyStmt = mysqli_prepare($con, "SELECT accession_number FROM study WHERE studyint = ? LIMIT 1");
+    if ($studyStmt) {
+        mysqli_stmt_bind_param($studyStmt, 's', $studyint);
+        mysqli_stmt_execute($studyStmt);
+        $studyRes = mysqli_stmt_get_result($studyStmt);
+        if ($studyRes instanceof mysqli_result && ($row = mysqli_fetch_assoc($studyRes))) {
+            $accession = trim((string) ($row['accession_number'] ?? ''));
+            if ($accession !== '') {
+                $candidates['identifiers'][] = $accession;
+                $candidates['identifiers'][] = rp_remote_storage_safe_name($accession);
+            }
+        }
+        mysqli_stmt_close($studyStmt);
+    }
+
+    $orderStmt = mysqli_prepare($con, "SELECT order_uid, accession_number, package_path FROM remote_report_orders WHERE studyint = ? ORDER BY id DESC LIMIT 10");
+    if ($orderStmt) {
+        mysqli_stmt_bind_param($orderStmt, 's', $studyint);
+        mysqli_stmt_execute($orderStmt);
+        $orderRes = mysqli_stmt_get_result($orderStmt);
+        if ($orderRes instanceof mysqli_result) {
+            while ($row = mysqli_fetch_assoc($orderRes)) {
+                foreach (['order_uid', 'accession_number'] as $key) {
+                    $value = trim((string) ($row[$key] ?? ''));
+                    if ($value !== '') {
+                        $candidates['identifiers'][] = $value;
+                        $candidates['identifiers'][] = rp_remote_storage_safe_name($value);
+                    }
+                }
+
+                $packagePath = trim((string) ($row['package_path'] ?? ''));
+                if ($packagePath !== '') {
+                    $candidates['package_paths'][] = $packagePath;
+                }
+            }
+        }
+        mysqli_stmt_close($orderStmt);
+    }
+
+    $candidates['identifiers'] = array_values(array_unique(array_filter($candidates['identifiers'])));
+    $candidates['package_paths'] = array_values(array_unique(array_filter($candidates['package_paths'])));
+
+    return $candidates;
+}
+
+function rp_remote_resolve_package_path(string $path, string $baseReal)
+{
+    $paths = [$path];
+    $remoteRoot = realpath(__DIR__ . '/..');
+    if ($remoteRoot !== false && !preg_match('/^(?:[A-Za-z]:[\\\\\/]|[\\\\\/])/', $path)) {
+        $paths[] = $remoteRoot . DIRECTORY_SEPARATOR . ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+    }
+
+    foreach ($paths as $candidate) {
+        $candidate = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $candidate);
+        if (is_dir($candidate)) {
+            $real = rp_remote_try_study_folder($candidate);
+            if ($real !== false && strpos($real, $baseReal) === 0) {
+                return $real;
+            }
+        }
+
+        if (is_file($candidate) && strtolower(pathinfo($candidate, PATHINFO_EXTENSION)) === 'zip') {
+            $zipReal = realpath($candidate);
+            $target = realpath(dirname($candidate));
+            if ($zipReal !== false && $target !== false && strpos($target, $baseReal) === 0) {
+                rp_remote_extract_study_zip($zipReal, $target);
+                return $target;
+            }
+        }
+    }
+
+    return false;
+}
+
+function rp_remote_cache_study_folder(string $cachePath, array &$cache, string $studyint, string $folder): void
+{
+    $cache[$studyint] = $folder;
+    $logDir = dirname($cachePath);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    @file_put_contents($cachePath, json_encode($cache));
+}
+
+function rp_remote_resolve_study_folder(mysqli $con, string $studyint)
+{
+    $baseDirectory = rp_remote_get_pacs_base_directory($con);
+    if (!is_dir($baseDirectory)) {
+        @mkdir($baseDirectory, 0775, true);
+    }
+
+    $baseReal = realpath($baseDirectory);
+    if ($baseReal === false) {
         return false;
     }
 
@@ -401,10 +592,36 @@ function rp_remote_resolve_study_folder(mysqli $con, string $studyint)
 
     if (isset($cache[$studyint]) && is_string($cache[$studyint]) && is_dir($cache[$studyint])) {
         $real = realpath($cache[$studyint]);
-        if ($real !== false) {
+        if ($real !== false && strpos($real, $baseReal) === 0) {
+            rp_remote_prepare_study_folder($real);
             return $real;
         }
     }
+
+    $candidates = rp_remote_study_storage_candidates($con, $studyint);
+
+    foreach ($candidates['package_paths'] as $packagePath) {
+        $real = rp_remote_resolve_package_path($packagePath, $baseReal);
+        if ($real !== false) {
+            rp_remote_cache_study_folder($cachePath, $cache, $studyint, $real);
+            return $real;
+        }
+    }
+
+    foreach ($candidates['identifiers'] as $identifier) {
+        $direct = $baseReal . DIRECTORY_SEPARATOR . $identifier;
+        $real = rp_remote_try_study_folder($direct);
+        if ($real !== false) {
+            rp_remote_cache_study_folder($cachePath, $cache, $studyint, $real);
+            return $real;
+        }
+    }
+
+    if (!rp_remote_allow_recursive_lookup($con)) {
+        return false;
+    }
+
+    $identifierMap = array_fill_keys($candidates['identifiers'], true);
 
     try {
         $it = new RecursiveIteratorIterator(
@@ -413,16 +630,10 @@ function rp_remote_resolve_study_folder(mysqli $con, string $studyint)
         );
 
         foreach ($it as $file) {
-            if ($file->isDir() && $file->getFilename() === $studyint) {
-                $found = $file->getPathname();
-                $real = realpath($found);
+            if ($file->isDir() && isset($identifierMap[$file->getFilename()])) {
+                $real = rp_remote_try_study_folder($file->getPathname());
                 if ($real !== false) {
-                    $cache[$studyint] = $real;
-                    $logDir = dirname($cachePath);
-                    if (!is_dir($logDir)) {
-                        @mkdir($logDir, 0755, true);
-                    }
-                    @file_put_contents($cachePath, json_encode($cache));
+                    rp_remote_cache_study_folder($cachePath, $cache, $studyint, $real);
                     return $real;
                 }
             }
