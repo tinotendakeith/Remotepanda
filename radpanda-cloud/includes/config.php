@@ -36,4 +36,5 @@ define('RP_CLOUD_ADMIN_MAX_LOGIN_ATTEMPTS', (int) rp_cloud_config_value('admin_m
 define('RP_CLOUD_ADMIN_LOCKOUT_SECONDS', (int) rp_cloud_config_value('admin_lockout_seconds', 'RP_CLOUD_ADMIN_LOCKOUT_SECONDS', 900));
 define('RP_CLOUD_REQUIRE_HASHED_ADMIN_PASSWORD', (string) rp_cloud_config_value('require_hashed_admin_password', 'RP_CLOUD_REQUIRE_HASHED_ADMIN_PASSWORD', '0') === '1');
 define('RP_CLOUD_PUBLIC_BASE_URL', rp_cloud_config_value('public_base_url', 'RP_CLOUD_PUBLIC_BASE_URL', 'https://radpanda.cloud'));
+define('RP_CLOUD_BASE_PATH', rp_cloud_config_value('base_path', 'RP_CLOUD_BASE_PATH', ''));
 ?>

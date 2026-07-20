@@ -1,6 +1,28 @@
 <?php
 require_once __DIR__ . '/api.php';
 
+function rp_cloud_base_path(): string
+{
+    $configured = trim((string) RP_CLOUD_BASE_PATH);
+    if ($configured !== '') {
+        return '/' . trim(str_replace('\\', '/', $configured), '/');
+    }
+
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $adminPosition = strpos($scriptName, '/admin/');
+    if ($adminPosition !== false) {
+        return rtrim(substr($scriptName, 0, $adminPosition), '/');
+    }
+
+    return '/radpanda-cloud';
+}
+
+function rp_cloud_admin_path(string $relative = ''): string
+{
+    $path = rp_cloud_base_path() . '/admin';
+    return $relative === '' ? $path : $path . '/' . ltrim($relative, '/');
+}
+
 function rp_cloud_admin_session_start(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -10,7 +32,7 @@ function rp_cloud_admin_session_start(): void
     $secure = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off');
     session_set_cookie_params(array(
         'lifetime' => 0,
-        'path' => '/radpanda-cloud/admin',
+        'path' => rp_cloud_admin_path(),
         'domain' => '',
         'secure' => $secure,
         'httponly' => true,
@@ -201,8 +223,8 @@ function rp_cloud_admin_require_login(): void
         return;
     }
 
-    $target = (string) ($_SERVER['REQUEST_URI'] ?? '/radpanda-cloud/admin/index.php');
-    header('Location: /radpanda-cloud/admin/login.php?next=' . rawurlencode($target));
+    $target = (string) ($_SERVER['REQUEST_URI'] ?? rp_cloud_admin_path('index.php'));
+    header('Location: ' . rp_cloud_admin_path('login.php') . '?next=' . rawurlencode($target));
     exit;
 }
 ?>

@@ -7,9 +7,11 @@ function h($value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-$next = trim((string) ($_GET['next'] ?? $_POST['next'] ?? '/radpanda-cloud/admin/index.php'));
-if ($next === '' || strpos($next, '/radpanda-cloud/admin/') !== 0 || strpos($next, '/radpanda-cloud/admin/login.php') === 0) {
-    $next = '/radpanda-cloud/admin/index.php';
+$adminPath = rp_cloud_admin_path();
+$loginPath = rp_cloud_admin_path('login.php');
+$next = trim((string) ($_GET['next'] ?? $_POST['next'] ?? rp_cloud_admin_path('index.php')));
+if ($next === '' || strpos($next, $adminPath . '/') !== 0 || strpos($next, $loginPath) === 0) {
+    $next = rp_cloud_admin_path('index.php');
 }
 
 if (rp_cloud_admin_is_logged_in()) {
