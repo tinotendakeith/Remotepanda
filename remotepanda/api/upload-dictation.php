@@ -48,7 +48,7 @@ if (class_exists('finfo')) {
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $detectedMime = strtolower(trim((string)$finfo->file($tmpPath)));
 }
-$mime = $detectedMime !== '' ? $detectedMime : $declaredMime;
+$mime = ($detectedMime !== '' && $detectedMime !== 'application/octet-stream') ? $detectedMime : $declaredMime;
 $allowed = array(
     'audio/webm',
     'video/webm',
