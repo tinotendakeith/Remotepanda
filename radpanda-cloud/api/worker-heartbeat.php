@@ -30,7 +30,7 @@ if (!in_array($status, $allowedStatuses, true)) {
 
 $con = rp_cloud_database_connect();
 rp_cloud_ensure_schema($con);
-rp_cloud_require_clinic_sync_key($con, $clinicId);
+rp_cloud_require_registered_clinic_sync_key($con, $clinicId);
 
 $stmt = $con->prepare(
     "INSERT INTO cloud_worker_heartbeats
