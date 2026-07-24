@@ -16,7 +16,7 @@ if ($clinicId === '') {
 
 $con = rp_cloud_database_connect();
 rp_cloud_ensure_schema($con);
-rp_cloud_require_clinic_sync_key($con, $clinicId);
+rp_cloud_require_registered_clinic_sync_key($con, $clinicId);
 
 $rows = [];
 $result = $con->query(
@@ -68,11 +68,15 @@ rp_cloud_audit($con, 'radiologist_directory_read', 'clinic', $clinicId, $clinicI
     'version' => $version,
 ]);
 
-rp_cloud_json([
+http_response_code(200);
+header('Content-Type: application/json');
+header('Cache-Control: private, max-age=60, must-revalidate');
+echo json_encode([
     'ok' => true,
     'source' => 'radpanda_cloud',
     'clinic_id' => $clinicId,
     'version' => $version,
     'generated_at' => gmdate('c'),
     'radiologists' => $rows,
-]);
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+exit;
