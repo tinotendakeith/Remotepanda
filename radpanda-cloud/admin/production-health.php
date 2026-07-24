@@ -288,7 +288,7 @@ $operatorAudit = rp_cloud_health_rows($con, "SELECT event_type, entity_type, ent
 <body>
 <div class="cloud-app">
     <aside class="sidebar">
-        <div class="brand"><img src="/radpanda/extensions/images/logo.png" alt="Radpanda"></div>
+        <div class="brand"><img src="../assets/images/logo.png" alt="Radpanda"></div>
         <nav class="side-nav">
             <a class="side-link" href="index.php"><i class="fa fa-dashboard"></i> Cloud Dashboard</a>
             <a class="side-link" href="index.php#orders"><i class="fa fa-file-text-o"></i> Report Orders</a>

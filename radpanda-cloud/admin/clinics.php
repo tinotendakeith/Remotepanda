@@ -211,7 +211,7 @@ $recentUploads = rp_cloud_admin_one($con, "SELECT COUNT(*) AS total FROM cloud_a
 <body>
 <div class="cloud-app">
     <aside class="sidebar">
-        <div class="brand"><img src="/radpanda/extensions/images/logo.png" alt="Radpanda"></div>
+        <div class="brand"><img src="../assets/images/logo.png" alt="Radpanda"></div>
         <nav class="side-nav">
             <a class="side-link" href="index.php"><i class="fa fa-dashboard"></i> Cloud Dashboard</a>
             <a class="side-link" href="index.php#orders"><i class="fa fa-file-text-o"></i> Report Orders</a>
@@ -230,7 +230,7 @@ $recentUploads = rp_cloud_admin_one($con, "SELECT COUNT(*) AS total FROM cloud_a
     <main class="main">
         <header class="topbar">
             <div class="page-title">
-                <div class="mobile-brand"><img src="/radpanda/extensions/images/logo.png" alt="Radpanda" style="width:168px;margin-bottom:12px"></div>
+                <div class="mobile-brand"><img src="../assets/images/logo.png" alt="Radpanda" style="width:168px;margin-bottom:12px"></div>
                 <h1>Clinics</h1>
                 <div>Register clinic nodes, manage API keys, and see sync health.</div>
             </div>

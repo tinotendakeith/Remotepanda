@@ -61,7 +61,7 @@ $requiresHash = RP_CLOUD_REQUIRE_HASHED_ADMIN_PASSWORD && RP_CLOUD_ADMIN_PASSWOR
 </head>
 <body>
     <main class="login">
-        <img class="logo" src="/radpanda/extensions/images/logo.png" alt="Radpanda">
+        <img class="logo" src="../assets/images/logo.png" alt="Radpanda">
         <div class="eyebrow">Cloud Admin</div>
         <h1>Sign in</h1>
         <p>Access report orders, clinic nodes, return queues, and production recovery tools.</p>
