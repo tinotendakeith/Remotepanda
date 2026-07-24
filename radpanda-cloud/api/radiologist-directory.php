@@ -24,10 +24,16 @@ $result = $con->query(
             modalities, max_daily_cases, reporting_notes, updated_at
        FROM cloud_radiologists
       WHERE status = 'active'
-      ORDER BY availability = 'available' DESC, display_name ASC, username ASC"
+      ORDER BY availability_status = 'available' DESC, display_name ASC, username ASC"
 );
+if (!$result) {
+    rp_cloud_audit($con, 'radiologist_directory_read', 'clinic', $clinicId, $clinicId, false, 'Cloud radiologist directory query failed.', [
+        'error' => $con->error,
+    ]);
+    rp_cloud_json(['ok' => false, 'message' => 'Radiologist directory is temporarily unavailable.'], 503);
+}
 
-while ($result && ($row = $result->fetch_assoc())) {
+while ($row = $result->fetch_assoc()) {
     $modalities = array_values(array_filter(array_map('trim', preg_split('/[,;]+/', (string) ($row['modalities'] ?? '')))));
     $rows[] = [
         'cloud_id' => (int) $row['id'],
