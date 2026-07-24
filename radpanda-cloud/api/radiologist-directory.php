@@ -20,8 +20,8 @@ rp_cloud_require_clinic_sync_key($con, $clinicId);
 
 $rows = [];
 $result = $con->query(
-    "SELECT id, username, display_name, email, phone, availability, status,
-            modalities, max_daily_cases, notes, updated_at
+    "SELECT id, username, display_name, email, phone, availability_status, status,
+            modalities, max_daily_cases, reporting_notes, updated_at
        FROM cloud_radiologists
       WHERE status = 'active'
       ORDER BY availability = 'available' DESC, display_name ASC, username ASC"
@@ -35,11 +35,11 @@ while ($result && ($row = $result->fetch_assoc())) {
         'display_name' => (string) $row['display_name'],
         'email' => (string) ($row['email'] ?? ''),
         'phone' => (string) ($row['phone'] ?? ''),
-        'availability' => (string) $row['availability'],
+        'availability' => (string) $row['availability_status'],
         'status' => (string) $row['status'],
         'modalities' => $modalities,
         'max_daily_cases' => (int) ($row['max_daily_cases'] ?? 0),
-        'notes' => (string) ($row['notes'] ?? ''),
+        'notes' => (string) ($row['reporting_notes'] ?? ''),
         'updated_at' => (string) ($row['updated_at'] ?? ''),
     ];
 }
