@@ -55,36 +55,34 @@ function rp_cloud_health_event_label(string $eventType): string
     return $labels[$eventType] ?? ucwords(str_replace('_', ' ', $eventType));
 }
 
-function rp_cloud_health_log_status(string $path, int $freshSeconds = 180): array
+function rp_cloud_health_worker_status(mysqli $con, string $workerKey, int $freshSeconds = 300): array
 {
-    if (!is_file($path)) {
-        return array('status' => 'action', 'label' => 'Missing', 'time' => '-', 'age' => null, 'tail' => array());
+    $workerEsc = mysqli_real_escape_string($con, $workerKey);
+    $row = rp_cloud_health_rows($con, "SELECT worker_key, node_uid, clinic_id, status, last_error, metrics_json, last_seen_at
+        FROM cloud_worker_heartbeats
+        WHERE worker_key = '{$workerEsc}'
+        ORDER BY last_seen_at DESC
+        LIMIT 1");
+    if (!$row) {
+        return array('status' => 'action', 'label' => 'Missing', 'time' => '-', 'age' => null, 'tail' => array(), 'node' => '');
     }
-    $mtime = filemtime($path);
-    $age = time() - (int) $mtime;
+    $heartbeat = $row[0];
+    $timestamp = strtotime((string) ($heartbeat['last_seen_at'] ?? '')) ?: 0;
+    $age = $timestamp > 0 ? max(0, time() - $timestamp) : PHP_INT_MAX;
+    $reportedStatus = strtolower(trim((string) ($heartbeat['status'] ?? 'ok')));
+    $status = $reportedStatus === 'error' ? 'action' : ($reportedStatus === 'warning' ? 'watch' : ($age <= $freshSeconds ? 'ok' : ($age <= 900 ? 'watch' : 'stale')));
+    $label = $reportedStatus === 'error' ? 'Error' : ($reportedStatus === 'warning' ? 'Warning' : ($age <= $freshSeconds ? 'Fresh' : ($age <= 900 ? 'Watch' : 'Stale')));
     $tail = array();
-    try {
-        $file = new SplFileObject($path, 'r');
-        $file->seek(PHP_INT_MAX);
-        $lastLine = $file->key();
-        $start = max(0, $lastLine - 5);
-        $file->seek($start);
-        while (!$file->eof()) {
-            $line = trim((string) $file->fgets());
-            if ($line !== '') {
-                $tail[] = $line;
-            }
-        }
-        $tail = array_slice($tail, -5);
-    } catch (Throwable $e) {
-        $tail = array('Could not read log tail: ' . $e->getMessage());
+    if (trim((string) ($heartbeat['last_error'] ?? '')) !== '') {
+        $tail[] = trim((string) $heartbeat['last_error']);
     }
     return array(
-        'status' => $age <= $freshSeconds ? 'ok' : ($age <= 900 ? 'watch' : 'stale'),
-        'label' => $age <= $freshSeconds ? 'Fresh' : ($age <= 900 ? 'Watch' : 'Stale'),
-        'time' => date('Y-m-d H:i:s', (int) $mtime),
+        'status' => $status,
+        'label' => $label,
+        'time' => (string) ($heartbeat['last_seen_at'] ?? '-'),
         'age' => $age,
         'tail' => $tail,
+        'node' => (string) ($heartbeat['node_uid'] ?? ''),
     );
 }
 
@@ -187,12 +185,11 @@ $lastUpload = rp_cloud_health_one($con, "SELECT MAX(created_at) AS value FROM cl
 $lastReturn = rp_cloud_health_one($con, "SELECT MAX(created_at) AS value FROM cloud_audit_log WHERE event_type = 'report_return_received'", 'value');
 $lastFeed = rp_cloud_health_one($con, "SELECT MAX(created_at) AS value FROM cloud_audit_log WHERE event_type = 'report_return_feed'", 'value');
 
-$logDir = realpath(__DIR__ . '/../storage/logs') ?: (__DIR__ . '/../storage/logs');
 $workers = array(
-    'Clinic Cloud Worker' => rp_cloud_health_log_status($logDir . DIRECTORY_SEPARATOR . 'clinic-cloud-worker.log'),
-    'Remotepanda Cloud Sync' => rp_cloud_health_log_status($logDir . DIRECTORY_SEPARATOR . 'remotepanda-cloud-sync.log'),
-    'Image Detection Worker' => rp_cloud_health_log_status($logDir . DIRECTORY_SEPARATOR . 'image-detection-worker.log'),
-    'Notification Worker' => rp_cloud_health_log_status($logDir . DIRECTORY_SEPARATOR . 'notification-worker.log'),
+    'Clinic Cloud Worker' => rp_cloud_health_worker_status($con, 'clinic_cloud_worker'),
+    'Remotepanda Cloud Sync' => rp_cloud_health_worker_status($con, 'remotepanda_cloud_sync'),
+    'Image Detection Worker' => rp_cloud_health_worker_status($con, 'image_detection_worker'),
+    'Notification Worker' => rp_cloud_health_worker_status($con, 'notification_worker'),
 );
 
 $checks = array();
@@ -205,7 +202,7 @@ rp_cloud_health_add_check($checks, 'Orders', 'Unassigned orders', $unassignedOrd
 rp_cloud_health_add_check($checks, 'Returns', 'Failed returns', $failedReturns === 0 ? 'ok' : 'action', $failedReturns . ' failed return item(s).', 'Inspect return queue and retry.');
 rp_cloud_health_add_check($checks, 'Audit', 'Failed events in 24h', $auditFailures24h === 0 ? 'ok' : 'watch', $auditFailures24h . ' failed audit event(s) in 24 hours.', 'Review audit events before pilot starts.');
 foreach ($workers as $name => $worker) {
-    rp_cloud_health_add_check($checks, 'Workers', $name, (string) $worker['status'], 'Last log update: ' . (string) $worker['time'], 'Open Workers page if stale.');
+    rp_cloud_health_add_check($checks, 'Workers', $name, (string) $worker['status'], 'Last heartbeat: ' . (string) $worker['time'] . ((string) ($worker['node'] ?? '') !== '' ? ' (' . (string) $worker['node'] . ')' : ''), 'Open Workers page if stale.');
 }
 
 $actionCount = 0;
