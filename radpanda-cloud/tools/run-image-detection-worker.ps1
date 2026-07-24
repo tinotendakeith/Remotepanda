@@ -9,7 +9,7 @@ Add-Content -Path $logFile -Value ("[{0}] Image Detection Worker started" -f (Ge
 }
 $rc = $LASTEXITCODE
 Add-Content -Path $logFile -Value ("[{0}] Image Detection Worker exit {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $rc)
-& 'C:\\xampp\\htdocs\\radpanda-cloud\\tools\\publish-worker-heartbeat.ps1' -WorkerKey 'image_detection_worker' -ExitCode $rc 2>&1 | ForEach-Object {
+& 'C:\xampp\htdocs\radpanda-cloud\tools\publish-worker-heartbeat.ps1' -WorkerKey 'image_detection_worker' -ExitCode $rc 2>&1 | ForEach-Object {
     Add-Content -Path $logFile -Encoding UTF8 -Value $_
 }
 exit $rc
