@@ -140,7 +140,7 @@ if ($radiologistUsername !== '' && $hasOwnerColumns) {
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap');
 body{background:#f2f7ff !important;font-family:'Barlow',sans-serif}.rp-page{padding:18px}.rp-title{margin:0;color:#0b1f3a;font-size:28px;font-weight:800}.rp-sub{margin:0;color:#4b5d77;font-size:14px}
 .rp-card{background:#fff;border:1px solid #d9e7ff;border-radius:18px;box-shadow:0 10px 20px rgba(7,33,66,.06);margin-top:16px;padding:18px}.rp-grid{display:grid;grid-template-columns:.8fr 1.35fr;gap:16px}.rp-facts{display:grid;grid-template-columns:150px 1fr;gap:7px 12px}.rp-facts .k{font-weight:700;color:#0f172a}.rp-facts .v{color:#0f172a}
-.rp-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}.rp-item{border:1px solid #e2e8f0;border-radius:12px;background:#f8fbff;padding:10px}.rp-item small{display:block;color:#64748b;margin-top:3px}
+.rp-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}.rp-item{border:1px solid #e2e8f0;border-radius:12px;background:#f8fbff;padding:10px}.rp-item small{display:block;color:#64748b;margin-top:3px}.rp-audio-tools{display:flex;align-items:center;gap:8px;margin-top:8px}.rp-audio-tools audio{width:100%;min-width:0}.rp-audio-speed{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a}.rp-shortcut-help{margin-top:10px;color:#475569;font-size:12px;font-weight:700}
 .rp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.rp-btn{border:none;border-radius:999px;padding:9px 16px;font-weight:800;display:inline-flex;gap:6px;align-items:center;text-decoration:none;cursor:pointer}.rp-btn-primary{background:#ed1b24;color:#fff}.rp-btn-secondary{background:#0a2a57;color:#fff}.rp-btn-ghost{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}.rp-status{font-size:13px;font-weight:700;color:#475569}.rp-message{border-left:4px solid #bfdbfe;padding:8px 10px;background:#fff;border-radius:8px;margin-bottom:8px}
 .rp-editor-shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px}.rp-template-rail{border:1px solid #d8e6f7;border-radius:14px;background:#f8fbff;padding:12px;min-height:540px}.rp-template-rail h4{margin:0 0 10px;font-weight:800;color:#07182f}.rp-template-search{width:100%;height:36px;border:1px solid #cbd5e1;border-radius:10px;padding:0 10px;margin-bottom:10px}
 .rp-template-list{display:grid;gap:8px;max-height:270px;overflow:auto;padding-right:3px}.rp-template-item{border:1px solid #cfe0f2;background:#fff;border-radius:12px;padding:9px 10px;text-align:left;font-weight:800;color:#07182f;cursor:pointer}.rp-template-item small{display:block;font-weight:600;color:#64748b;margin-top:2px}.rp-template-item:hover,.rp-template-item.active{border-color:#2f7fbd;background:#edf6ff}.rp-template-empty{border:1px dashed #cbd5e1;border-radius:12px;padding:14px;color:#64748b;background:#fff}
@@ -178,10 +178,20 @@ include_once('../../includes/radiographer-sidebar.php');
               <strong><?php echo h($dictation['radiologist_username'] ?? 'Radiologist'); ?></strong>
               <small><?php echo h($dictation['created_at'] ?? ''); ?> &middot; <?php echo number_format(((int)($dictation['file_size'] ?? 0)) / 1024, 1); ?> KB</small>
               <?php if (trim((string)($dictation['note_text'] ?? '')) !== ''): ?><small><?php echo h($dictation['note_text']); ?></small><?php endif; ?>
-              <audio controls preload="none" src="/remotepanda/api/download-dictation.php?id=<?php echo (int)$dictation['id']; ?>" style="width:100%;margin-top:8px;"></audio>
+              <div class="rp-audio-tools">
+                <audio class="js-dictation-player" controls preload="metadata" src="/remotepanda/api/download-dictation.php?id=<?php echo (int)$dictation['id']; ?>"></audio>
+                <select class="rp-audio-speed js-audio-speed" aria-label="Playback speed">
+                  <option value="0.75">0.75x</option>
+                  <option value="1" selected>1x</option>
+                  <option value="1.25">1.25x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2x</option>
+                </select>
+              </div>
             </li>
           <?php endforeach; ?>
         </ul>
+        <div class="rp-shortcut-help">Keyboard: F2 play/pause · F3 rewind 3 seconds · F4 forward 3 seconds</div>
       <?php else: ?>
         <div class="rp-item">No dictations are saved for this case yet.</div>
       <?php endif; ?>
@@ -256,6 +266,48 @@ document.addEventListener('DOMContentLoaded', function () {
   const studyint = <?php echo json_encode($studyint); ?>;
   const templates = <?php echo json_encode($templateRecords); ?>;
   const templateContext = <?php echo json_encode($templateContext); ?>;
+  const dictationPlayers = Array.prototype.slice.call(document.querySelectorAll('.js-dictation-player'));
+  let activeDictation = dictationPlayers.length ? dictationPlayers[0] : null;
+  let autoSaveTimer = null;
+  let autoSaveInFlight = false;
+
+  function handleTranscriptionShortcut(event) {
+    if (!activeDictation || !['F2', 'F3', 'F4'].includes(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'F2') {
+      if (activeDictation.paused) {
+        activeDictation.play().catch(function () {});
+      } else {
+        activeDictation.pause();
+      }
+    } else if (event.key === 'F3') {
+      activeDictation.currentTime = Math.max(0, activeDictation.currentTime - 3);
+    } else if (event.key === 'F4') {
+      const end = Number.isFinite(activeDictation.duration) ? activeDictation.duration : activeDictation.currentTime + 3;
+      activeDictation.currentTime = Math.min(end, activeDictation.currentTime + 3);
+    }
+  }
+
+  dictationPlayers.forEach(function (player) {
+    player.addEventListener('play', function () {
+      activeDictation = player;
+      dictationPlayers.forEach(function (other) {
+        if (other !== player && !other.paused) other.pause();
+      });
+    });
+    player.addEventListener('focus', function () { activeDictation = player; });
+  });
+  document.querySelectorAll('.js-audio-speed').forEach(function (select) {
+    select.addEventListener('change', function () {
+      const player = select.closest('.rp-audio-tools').querySelector('.js-dictation-player');
+      if (player) {
+        activeDictation = player;
+        player.playbackRate = parseFloat(select.value || '1');
+      }
+    });
+  });
+  document.addEventListener('keydown', handleTranscriptionShortcut);
 
   if (window.tinymce && textarea) {
     tinymce.init({
@@ -265,7 +317,11 @@ document.addEventListener('DOMContentLoaded', function () {
       menubar: 'file edit view insert format tools table',
       plugins: 'lists link table code autoresize',
       toolbar: 'undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | code',
-      content_style: 'body{font-family:Barlow,Arial,sans-serif;font-size:14px;line-height:1.55;color:#07182f;}'
+      content_style: 'body{font-family:Barlow,Arial,sans-serif;font-size:14px;line-height:1.55;color:#07182f;}',
+      setup: function (ed) {
+        ed.on('input change undo redo', scheduleAutoSave);
+        ed.on('keydown', handleTranscriptionShortcut);
+      }
     });
   }
 
@@ -310,6 +366,32 @@ document.addEventListener('DOMContentLoaded', function () {
       status.textContent = text || '';
       status.style.color = color || '#475569';
     }
+  }
+
+  async function autoSaveDraft() {
+    if (autoSaveInFlight) {
+      scheduleAutoSave();
+      return;
+    }
+    autoSaveInFlight = true;
+    setStatus('Autosaving draft...', '#475569');
+    try {
+      const data = await send('save_draft');
+      setStatus(data.message ? data.message + ' (autosaved)' : 'Draft autosaved.', '#0f766e');
+    } catch (err) {
+      setStatus('Autosave failed. Your text remains in the editor; use Save Draft to retry.', '#b91c1c');
+    }
+    autoSaveInFlight = false;
+  }
+
+  function scheduleAutoSave() {
+    if (autoSaveTimer) window.clearTimeout(autoSaveTimer);
+    setStatus('Unsaved changes...', '#92400e');
+    autoSaveTimer = window.setTimeout(autoSaveDraft, 1800);
+  }
+
+  if (textarea) {
+    textarea.addEventListener('input', scheduleAutoSave);
   }
 
   async function send(action) {
@@ -374,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function () {
       submitBtn.disabled = true;
       setStatus('Sending to radiologist...', '#475569');
       try {
+        if (autoSaveTimer) window.clearTimeout(autoSaveTimer);
         const data = await send('submit_draft');
         setStatus(data.message || 'Draft sent to radiologist.', '#0f766e');
       } catch (err) {

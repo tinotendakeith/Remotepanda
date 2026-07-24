@@ -29,18 +29,43 @@ if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
     rp_remote_json_response(array('success' => false, 'error' => 'Audio upload failed.'), 400);
 }
 
+$tmpPath = (string)($file['tmp_name'] ?? '');
+if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+    rp_remote_json_response(array('success' => false, 'error' => 'Invalid audio upload.'), 400);
+}
+
 $size = (int)($file['size'] ?? 0);
 if ($size <= 0) {
     rp_remote_json_response(array('success' => false, 'error' => 'Audio file is empty.'), 400);
 }
-if ($size > 80 * 1024 * 1024) {
-    rp_remote_json_response(array('success' => false, 'error' => 'Audio file is too large.'), 413);
+if ($size > 32 * 1024 * 1024) {
+    rp_remote_json_response(array('success' => false, 'error' => 'Audio file exceeds the 32 MB limit.'), 413);
 }
 
-$mime = (string)($file['type'] ?? 'audio/webm');
-$allowed = array('audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'video/webm');
-if (!in_array(strtolower($mime), $allowed, true) && strpos(strtolower($mime), 'audio/') !== 0) {
+$declaredMime = strtolower(trim((string)($file['type'] ?? '')));
+$detectedMime = '';
+if (class_exists('finfo')) {
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $detectedMime = strtolower(trim((string)$finfo->file($tmpPath)));
+}
+$mime = ($detectedMime !== '' && $detectedMime !== 'application/octet-stream') ? $detectedMime : $declaredMime;
+$allowed = array(
+    'audio/webm',
+    'video/webm',
+    'audio/ogg',
+    'application/ogg',
+    'audio/mpeg',
+    'audio/mp4',
+    'video/mp4',
+    'audio/x-m4a',
+    'audio/wav',
+    'audio/x-wav'
+);
+if (!in_array($mime, $allowed, true)) {
     rp_remote_json_response(array('success' => false, 'error' => 'Unsupported audio type.'), 400);
+}
+if ($declaredMime !== '' && !in_array($declaredMime, $allowed, true)) {
+    rp_remote_json_response(array('success' => false, 'error' => 'The browser supplied an unsupported audio type.'), 400);
 }
 
 $root = rp_typist_workflow_storage_root();
@@ -62,18 +87,20 @@ if (stripos($mime, 'ogg') !== false) {
 
 $fileName = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
 $dest = $studyDir . DIRECTORY_SEPARATOR . $fileName;
-if (!move_uploaded_file((string)$file['tmp_name'], $dest)) {
+if (!move_uploaded_file($tmpPath, $dest)) {
     rp_remote_json_response(array('success' => false, 'error' => 'Could not save uploaded audio.'), 500);
 }
+
+@chmod($dest, 0640);
 
 $result = rp_typist_workflow_create_dictation(
     $con,
     $studyint,
     $dest,
-    (string)($file['name'] ?? $fileName),
+    basename((string)($file['name'] ?? $fileName)),
     $mime,
     $size,
-    $noteText,
+    function_exists('mb_substr') ? mb_substr($noteText, 0, 1000) : substr($noteText, 0, 1000),
     rp_typist_workflow_user()
 );
 

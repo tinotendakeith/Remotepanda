@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/remote_reporting_service.php';
+require_once __DIR__ . '/report_workflow_state_service.php';
 
 function rp_typist_workflow_ensure_schema(mysqli $con): void
 {
@@ -253,6 +254,15 @@ function rp_typist_workflow_get_case_state(mysqli $con, string $studyint): array
         mysqli_stmt_close($stmt);
     }
 
+    $storedStatus = (string)(($state['order']['status'] ?? ''));
+    $canonicalStatus = rp_report_workflow_canonical_state($storedStatus);
+    $allowed = rp_report_workflow_allowed_transitions();
+    $state['workflow'] = array(
+        'stored_status' => $storedStatus,
+        'canonical_status' => $canonicalStatus,
+        'allowed_next_states' => $allowed[$canonicalStatus] ?? array(),
+    );
+
     return $state;
 }
 
@@ -314,11 +324,10 @@ function rp_typist_workflow_create_dictation(mysqli $con, string $studyint, stri
         return array('ok' => false, 'error' => 'Could not save dictation.');
     }
 
-    $up = mysqli_prepare($con, "UPDATE remote_report_orders SET status = 'dictated', updated_at = NOW() WHERE studyint = ? AND status NOT IN ('reported','returned') LIMIT 1");
-    if ($up) {
-        mysqli_stmt_bind_param($up, 's', $studyint);
-        mysqli_stmt_execute($up);
-        mysqli_stmt_close($up);
+    $transition = rp_report_workflow_transition_order($con, $studyint, 'dictated');
+    if (empty($transition['ok'])) {
+        @mysqli_query($con, "DELETE FROM report_dictations WHERE id = " . (int)$id . " LIMIT 1");
+        return array('ok' => false, 'error' => (string)($transition['error'] ?? 'Could not update report workflow.'));
     }
     $up = mysqli_prepare($con, "UPDATE study SET status = 'In Progress', assignment_updated_at = NOW() WHERE studyint = ? AND status <> 'Finalized' LIMIT 1");
     if ($up) {
@@ -350,11 +359,9 @@ function rp_typist_workflow_send_to_typist(mysqli $con, string $studyint, string
         mysqli_stmt_close($stmt);
     }
 
-    $up = mysqli_prepare($con, "UPDATE remote_report_orders SET status = 'with_typist', updated_at = NOW() WHERE studyint = ? AND status NOT IN ('reported','returned') LIMIT 1");
-    if ($up) {
-        mysqli_stmt_bind_param($up, 's', $studyint);
-        mysqli_stmt_execute($up);
-        mysqli_stmt_close($up);
+    $transition = rp_report_workflow_transition_order($con, $studyint, 'with_typist');
+    if (empty($transition['ok'])) {
+        return array('ok' => false, 'error' => (string)($transition['error'] ?? 'Could not update report workflow.'));
     }
 
     $msg = trim($message) !== '' ? trim($message) : 'Case sent to typist for report preparation.';
@@ -409,11 +416,9 @@ function rp_typist_workflow_save_draft(mysqli $con, string $studyint, string $dr
         mysqli_stmt_close($stmt);
     }
 
-    $up = mysqli_prepare($con, "UPDATE remote_report_orders SET status = ?, updated_at = NOW() WHERE studyint = ? AND status NOT IN ('reported','returned') LIMIT 1");
-    if ($up) {
-        mysqli_stmt_bind_param($up, 'ss', $status, $studyint);
-        mysqli_stmt_execute($up);
-        mysqli_stmt_close($up);
+    $transition = rp_report_workflow_transition_order($con, $studyint, $status);
+    if (empty($transition['ok'])) {
+        return array('ok' => false, 'error' => (string)($transition['error'] ?? 'Could not update report workflow.'));
     }
 
     if ($submit) {
@@ -438,11 +443,9 @@ function rp_typist_workflow_request_edits(mysqli $con, string $studyint, string 
         mysqli_stmt_execute($up);
         mysqli_stmt_close($up);
     }
-    $up = mysqli_prepare($con, "UPDATE remote_report_orders SET status = 'needs_typist_edits', updated_at = NOW() WHERE studyint = ? AND status NOT IN ('reported','returned') LIMIT 1");
-    if ($up) {
-        mysqli_stmt_bind_param($up, 's', $studyint);
-        mysqli_stmt_execute($up);
-        mysqli_stmt_close($up);
+    $transition = rp_report_workflow_transition_order($con, $studyint, 'needs_typist_edits');
+    if (empty($transition['ok'])) {
+        return array('ok' => false, 'error' => (string)($transition['error'] ?? 'Could not update report workflow.'));
     }
     rp_typist_workflow_add_message($con, $studyint, $orderUid, $msg, 'typist', 'edits_requested', $user);
     return array('ok' => true, 'message' => 'Returned to typist for edits.');
