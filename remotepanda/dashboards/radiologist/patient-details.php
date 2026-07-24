@@ -1320,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let isDictating = false;
     let mediaRecorder = null;
     let audioChunks = [];
+    let recordingStartedAt = 0;
     let currentRecordingUrl = '';
     let notesDirty = false;
     let pendingFinalize = null;
@@ -1672,33 +1673,87 @@ document.addEventListener('DOMContentLoaded', function () {
         return data;
     }
 
+    function preferredDictationMimeType() {
+        const candidates = [
+            'audio/webm;codecs=opus',
+            'audio/ogg;codecs=opus',
+            'audio/webm',
+            'audio/ogg'
+        ];
+        if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') {
+            return '';
+        }
+        for (let i = 0; i < candidates.length; i++) {
+            if (MediaRecorder.isTypeSupported(candidates[i])) {
+                return candidates[i];
+            }
+        }
+        return '';
+    }
+
+    function dictationExtension(mimeType) {
+        const value = (mimeType || '').toLowerCase();
+        if (value.indexOf('ogg') !== -1) return 'ogg';
+        if (value.indexOf('mp4') !== -1 || value.indexOf('m4a') !== -1) return 'm4a';
+        return 'webm';
+    }
+
+    function waitBeforeRetry(milliseconds) {
+        return new Promise(function (resolve) { window.setTimeout(resolve, milliseconds); });
+    }
+
     async function uploadDictationBlob(audioBlob, mimeType) {
         const sid = resolveStudyint(currentStudyint || (sendToTypistBtn ? sendToTypistBtn.dataset.studyint : ''));
         if (!sid || !audioBlob || !audioBlob.size) {
-            return;
+            throw new Error('The recording is empty or is missing its study ID.');
         }
-        const form = new FormData();
-        const extension = (mimeType || '').indexOf('ogg') !== -1 ? 'ogg' : 'webm';
-        form.append('studyint', sid);
-        form.append('note_text', notesTextarea ? notesTextarea.value.trim().slice(0, 1000) : '');
-        form.append('audio', audioBlob, 'dictation-' + Date.now() + '.' + extension);
+        if (audioBlob.size > 32 * 1024 * 1024) {
+            throw new Error('This recording exceeds 32 MB. Record it in shorter sections.');
+        }
 
-        if (recordingStatus) {
-            recordingStatus.textContent = 'Saving recording for typists...';
+        const extension = dictationExtension(mimeType);
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            const form = new FormData();
+            form.append('studyint', sid);
+            form.append('note_text', notesTextarea ? notesTextarea.value.trim().slice(0, 1000) : '');
+            form.append('duration_seconds', String(Math.max(0, Math.round((Date.now() - recordingStartedAt) / 1000))));
+            form.append('audio', audioBlob, 'dictation-' + Date.now() + '.' + extension);
+
+            if (recordingStatus) {
+                recordingStatus.textContent = attempt === 1
+                    ? 'Uploading compressed dictation...'
+                    : 'Upload interrupted. Retrying (' + attempt + '/3)...';
+            }
+
+            try {
+                const res = await fetch(remoteBaseUrl + '/api/upload-dictation.php', {
+                    cache: 'no-store',
+                    method: 'POST',
+                    body: form
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    const error = new Error(data.error || 'Could not save recording.');
+                    error.retryable = res.status >= 500 || res.status === 408 || res.status === 429;
+                    throw error;
+                }
+                if (recordingStatus) {
+                    recordingStatus.textContent = data.message || 'Compressed dictation saved for typists.';
+                }
+                setTypistStatus('Dictation saved and ready for the typist queue.', '#0f766e');
+                return data;
+            } catch (err) {
+                lastError = err;
+                if (err && err.retryable === false) {
+                    break;
+                }
+                if (attempt < 3) {
+                    await waitBeforeRetry(attempt * 1200);
+                }
+            }
         }
-        const res = await fetch(remoteBaseUrl + '/api/upload-dictation.php', {
-            cache: 'no-store',
-            method: 'POST',
-            body: form
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-            throw new Error(data.error || 'Could not save recording.');
-        }
-        if (recordingStatus) {
-            recordingStatus.textContent = data.message || 'Recording saved for typists.';
-        }
-        setTypistStatus('Dictation saved. Refresh to see it in the list.', '#0f766e');
+        throw lastError || new Error('Could not upload the dictation after three attempts.');
     }
 
     function updateNotesMeta(lastSavedBy, lastSavedAt, hasMetaColumns) {
@@ -2103,8 +2158,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 let stream = null;
                 try {
                     stream = await requestMicrophoneStream(recordingStatus);
-                    mediaRecorder = new MediaRecorder(stream);
+                    const preferredMime = preferredDictationMimeType();
+                    const recorderOptions = { audioBitsPerSecond: 32000 };
+                    if (preferredMime) {
+                        recorderOptions.mimeType = preferredMime;
+                    }
+                    mediaRecorder = new MediaRecorder(stream, recorderOptions);
                     audioChunks = [];
+                    recordingStartedAt = Date.now();
 
                     mediaRecorder.ondataavailable = function (event) {
                         if (event.data && event.data.size > 0) {
@@ -2126,7 +2187,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
 
                         if (downloadRecordingLink) {
-                            const extension = mimeType.indexOf('ogg') !== -1 ? 'ogg' : 'webm';
+                            const extension = dictationExtension(mimeType);
                             downloadRecordingLink.href = currentRecordingUrl;
                             downloadRecordingLink.download = 'study-' + (currentStudyint || 'recording') + '-dictation.' + extension;
                             downloadRecordingLink.style.display = 'inline-block';
@@ -2145,7 +2206,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         stream.getTracks().forEach(function (t) { t.stop(); });
                     };
 
-                    mediaRecorder.start();
+                    mediaRecorder.start(1000);
                     if (recordingStatus) {
                         recordingStatus.textContent = 'Recording...';
                     }
