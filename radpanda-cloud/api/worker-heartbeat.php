@@ -50,8 +50,7 @@ $stmt->execute();
 
 $con->query("UPDATE cloud_clinics SET last_seen_at = NOW(), updated_at = NOW() WHERE clinic_uid = '" . $con->real_escape_string($clinicId) . "'");
 
-rp_cloud_audit($con, 'worker_heartbeat', 'worker', $workerKey . ':' . $nodeUid, [
-    'clinic_id' => $clinicId,
+rp_cloud_audit($con, 'worker_heartbeat', 'worker', $workerKey . ':' . $nodeUid, $clinicId, $status !== 'error', 'Worker heartbeat received.', [
     'status' => $status,
     'metrics' => $metrics,
 ]);
