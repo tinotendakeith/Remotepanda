@@ -44,9 +44,24 @@ $stmt = $con->prepare(
         last_seen_at = NOW(),
         updated_at = NOW()"
 );
+if (!$stmt) {
+    rp_cloud_audit($con, 'worker_heartbeat', 'worker', $workerKey . ':' . $nodeUid, $clinicId, false, 'Worker heartbeat statement could not be prepared.', [
+        'error' => $con->error,
+    ]);
+    rp_cloud_json(['ok' => false, 'message' => 'Worker heartbeat could not be stored.'], 503);
+}
+
 $metricsJson = json_encode($metrics, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $stmt->bind_param('ssssss', $workerKey, $nodeUid, $clinicId, $status, $lastError, $metricsJson);
-$stmt->execute();
+if (!$stmt->execute()) {
+    $error = $stmt->error;
+    $stmt->close();
+    rp_cloud_audit($con, 'worker_heartbeat', 'worker', $workerKey . ':' . $nodeUid, $clinicId, false, 'Worker heartbeat could not be stored.', [
+        'error' => $error,
+    ]);
+    rp_cloud_json(['ok' => false, 'message' => 'Worker heartbeat could not be stored.'], 503);
+}
+$stmt->close();
 
 $con->query("UPDATE cloud_clinics SET last_seen_at = NOW(), updated_at = NOW() WHERE clinic_uid = '" . $con->real_escape_string($clinicId) . "'");
 
