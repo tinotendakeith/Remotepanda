@@ -25,6 +25,17 @@ $returnLimit = max(1, min(50, $returnLimit));
 $importSummary = rp_remote_cloud_bridge_import_orders($con, $importLimit);
 $returnSummary = rp_remote_cloud_push_returned_reports($con, $returnLimit);
 $success = empty($importSummary['failed']) && empty($returnSummary['failed']);
+$heartbeatErrors = array_merge((array) ($importSummary['errors'] ?? array()), (array) ($returnSummary['errors'] ?? array()));
+rp_remote_cloud_publish_worker_heartbeat(
+    $success ? 'ok' : 'error',
+    array(
+        'import_checked' => (int) ($importSummary['checked'] ?? 0),
+        'imported' => (int) ($importSummary['imported'] ?? 0),
+        'return_checked' => (int) ($returnSummary['checked'] ?? 0),
+        'returned' => (int) ($returnSummary['sent'] ?? 0),
+    ),
+    $heartbeatErrors ? implode('; ', array_slice($heartbeatErrors, 0, 5)) : ''
+);
 
 if (PHP_SAPI === 'cli') {
     echo '[cloud-sync-worker] import checked=' . (int) $importSummary['checked']
