@@ -41,8 +41,8 @@ function rp_report_workflow_canonical_state(string $status): string
 function rp_report_workflow_allowed_transitions(): array
 {
     return array(
-        'awaiting_report' => array('direct_draft', 'pending_transcription', 'finalized'),
-        'direct_draft' => array('pending_transcription', 'finalized'),
+        'awaiting_report' => array('direct_draft', 'pending_transcription', 'transcription_in_progress', 'finalized'),
+        'direct_draft' => array('pending_transcription', 'transcription_in_progress', 'finalized'),
         'pending_transcription' => array('transcription_in_progress', 'direct_draft'),
         'transcription_in_progress' => array('pending_transcription', 'pending_signoff', 'direct_draft'),
         'pending_signoff' => array('transcription_in_progress', 'finalized'),
