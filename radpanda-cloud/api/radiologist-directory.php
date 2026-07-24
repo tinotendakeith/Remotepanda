@@ -57,8 +57,7 @@ if (trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
     exit;
 }
 
-rp_cloud_audit($con, 'radiologist_directory_read', 'clinic', $clinicId, [
-    'clinic_id' => $clinicId,
+rp_cloud_audit($con, 'radiologist_directory_read', 'clinic', $clinicId, $clinicId, true, 'Cloud radiologist directory read.', [
     'count' => count($rows),
     'version' => $version,
 ]);
