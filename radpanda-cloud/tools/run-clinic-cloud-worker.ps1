@@ -9,4 +9,7 @@ Add-Content -Path $logFile -Value ("[{0}] Clinic Cloud Worker started" -f (Get-D
 }
 $rc = $LASTEXITCODE
 Add-Content -Path $logFile -Value ("[{0}] Clinic Cloud Worker exit {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $rc)
+& 'C:\xampp\htdocs\radpanda-cloud\tools\publish-worker-heartbeat.ps1' -WorkerKey 'clinic_cloud_worker' -ExitCode $rc 2>&1 | ForEach-Object {
+    Add-Content -Path $logFile -Encoding UTF8 -Value $_
+}
 exit $rc

@@ -199,6 +199,23 @@ function rp_cloud_ensure_schema(mysqli $con): void
         KEY idx_cloud_audit_clinic (clinic_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+    mysqli_query($con, "CREATE TABLE IF NOT EXISTS cloud_worker_heartbeats (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        worker_key VARCHAR(80) NOT NULL,
+        node_uid VARCHAR(120) NOT NULL DEFAULT '',
+        clinic_id VARCHAR(120) NOT NULL DEFAULT '',
+        owner_type VARCHAR(40) NOT NULL DEFAULT 'clinic',
+        status VARCHAR(40) NOT NULL DEFAULT 'ok',
+        last_error TEXT NULL,
+        metrics_json MEDIUMTEXT NULL,
+        last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_cloud_worker_node (worker_key, node_uid),
+        KEY idx_cloud_worker_freshness (worker_key, last_seen_at),
+        KEY idx_cloud_worker_clinic (clinic_id, last_seen_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
     $done = true;
 }
 ?>

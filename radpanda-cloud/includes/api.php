@@ -90,6 +90,48 @@ function rp_cloud_require_clinic_sync_key(mysqli $con, string $clinicId, ?array 
     rp_cloud_json(array('success' => false, 'error' => 'Unauthorized.'), 401);
 }
 
+
+function rp_cloud_require_registered_clinic_sync_key(mysqli $con, string $clinicId, ?array $input = null): void
+{
+    $clinicId = trim($clinicId);
+    if ($clinicId === '') {
+        rp_cloud_json(array('success' => false, 'error' => 'Clinic identity is required.'), 422);
+    }
+
+    $stmt = mysqli_prepare($con, "SELECT api_key_hash FROM cloud_clinics WHERE clinic_uid = ? AND status = 'active' LIMIT 1");
+    if (!$stmt) {
+        rp_cloud_json(array('success' => false, 'error' => 'Could not verify clinic credentials.'), 500);
+    }
+    mysqli_stmt_bind_param($stmt, 's', $clinicId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    if (!$row) {
+        rp_cloud_json(array('success' => false, 'error' => 'Unknown or inactive clinic.'), 401);
+    }
+
+    $provided = rp_cloud_request_sync_key($input);
+    $global = trim((string) RP_CLOUD_SYNC_KEY);
+    if ($global !== '') {
+        if ($provided !== '' && hash_equals($global, $provided)) {
+            return;
+        }
+        rp_cloud_json(array('success' => false, 'error' => 'Unauthorized.'), 401);
+    }
+
+    $hash = trim((string) ($row['api_key_hash'] ?? ''));
+    if ($hash === '') {
+        rp_cloud_json(array('success' => false, 'error' => 'Clinic credentials are not configured.'), 401);
+    }
+    if ($provided !== '' && password_verify($provided, $hash)) {
+        return;
+    }
+
+    rp_cloud_json(array('success' => false, 'error' => 'Unauthorized.'), 401);
+}
+
 function rp_cloud_safe_name(string $value, string $fallback = 'item'): string
 {
     $clean = preg_replace('/[^A-Za-z0-9_.-]/', '_', trim($value));

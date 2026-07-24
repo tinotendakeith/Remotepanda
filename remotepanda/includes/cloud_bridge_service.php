@@ -344,4 +344,45 @@ function rp_remote_cloud_push_returned_reports(mysqli $con, int $limit = 10): ar
 
     return $summary;
 }
+
+function rp_remote_cloud_publish_worker_heartbeat(string $status, array $metrics = array(), string $lastError = ''): bool
+{
+    try {
+        $cloud = rp_remote_cloud_database_connect();
+        mysqli_query($cloud, "CREATE TABLE IF NOT EXISTS cloud_worker_heartbeats (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            worker_key VARCHAR(80) NOT NULL,
+            node_uid VARCHAR(120) NOT NULL DEFAULT '',
+            clinic_id VARCHAR(120) NOT NULL DEFAULT '',
+            owner_type VARCHAR(40) NOT NULL DEFAULT 'remote',
+            status VARCHAR(40) NOT NULL DEFAULT 'ok',
+            last_error TEXT NULL,
+            metrics_json MEDIUMTEXT NULL,
+            last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_cloud_worker_node (worker_key, node_uid),
+            KEY idx_cloud_worker_freshness (worker_key, last_seen_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $workerKey = 'remotepanda_cloud_sync';
+        $nodeUid = php_uname('n') ?: 'remotepanda';
+        $status = in_array($status, array('ok', 'warning', 'error'), true) ? $status : 'error';
+        $metricsJson = json_encode($metrics, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $stmt = mysqli_prepare($cloud, "INSERT INTO cloud_worker_heartbeats
+            (worker_key, node_uid, owner_type, status, last_error, metrics_json, last_seen_at)
+            VALUES (?, ?, 'remote', ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE status = VALUES(status), last_error = VALUES(last_error),
+                metrics_json = VALUES(metrics_json), last_seen_at = NOW(), updated_at = NOW()");
+        if (!$stmt) {
+            return false;
+        }
+        mysqli_stmt_bind_param($stmt, 'sssss', $workerKey, $nodeUid, $status, $lastError, $metricsJson);
+        $ok = mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+        return $ok;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 ?>
